@@ -4,6 +4,7 @@ import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.graphics.RectF;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
@@ -39,6 +40,18 @@ public class SquareOverlayView extends View {
     private static final int CORNER_SIZE = 80;
     private boolean isResizing = false;
 
+    private Paint buttonPaint;
+    private Paint buttonTextPaint;
+    private RectF screenshotButton;
+    private static final int BUTTON_SIZE = 100;
+    private static final int BUTTON_MARGIN = 10;
+
+    public interface ScreenshotCallback {
+        void onScreenshotRequested(float xPercent, float yPercent, float widthPercent, float heightPercent, Runnable onHidden);
+    }
+
+    private ScreenshotCallback screenshotCallback;
+
     public SquareOverlayView(Context context, int screenWidth, int screenHeight, float initialSquareSize) {
         super(context);
         
@@ -66,8 +79,25 @@ public class SquareOverlayView extends View {
         textBackgroundPaint = new Paint();
         textBackgroundPaint.setColor(Color.argb(200, 0, 0, 0));
         textBackgroundPaint.setStyle(Paint.Style.FILL);
-        
+
+        buttonPaint = new Paint();
+        buttonPaint.setColor(Color.GREEN);
+        buttonPaint.setStyle(Paint.Style.FILL);
+        buttonPaint.setAntiAlias(true);
+
+        buttonTextPaint = new Paint();
+        buttonTextPaint.setColor(Color.WHITE);
+        buttonTextPaint.setTextSize(35);
+        buttonTextPaint.setAntiAlias(true);
+        buttonTextPaint.setTextAlign(Paint.Align.CENTER);
+
+        screenshotButton = new RectF();
+
         Log.d(TAG, "View created with square size: " + (int)squareSize);
+    }
+
+    public void setScreenshotCallback(ScreenshotCallback callback) {
+        this.screenshotCallback = callback;
     }
 
     public void setWindowManager(WindowManager wm, WindowManager.LayoutParams params) {
@@ -120,6 +150,14 @@ public class SquareOverlayView extends View {
         for (int i = 0; i < lines.length; i++) {
             canvas.drawText(lines[i], textX, textY + (i * lineHeight), textPaint);
         }
+
+        // Draw screenshot button at top-right of square
+        float buttonX = squareX + squareSize - BUTTON_SIZE - BUTTON_MARGIN;
+        float buttonY = squareY + BUTTON_MARGIN;
+        screenshotButton.set(buttonX, buttonY, buttonX + BUTTON_SIZE, buttonY + BUTTON_SIZE);
+
+        canvas.drawRoundRect(screenshotButton, 10, 10, buttonPaint);
+        canvas.drawText("📷", screenshotButton.centerX(), screenshotButton.centerY() + 12, buttonTextPaint);
     }
 
     @Override
@@ -133,12 +171,28 @@ public class SquareOverlayView extends View {
         
         switch (event.getAction()) {
             case MotionEvent.ACTION_DOWN:
+                // Check screenshot button first
+                if (screenshotButton.contains(touchX, touchY)) {
+                    if (screenshotCallback != null) {
+                        float xPercent = (absoluteScreenX / screenWidth) * 100;
+                        float yPercent = (absoluteScreenY / screenHeight) * 100;
+                        float widthPercent = (squareSize / screenWidth) * 100;
+                        float heightPercent = (squareSize / screenHeight) * 100;
+
+                        // Hide overlay, capture, then show again
+                        screenshotCallback.onScreenshotRequested(xPercent, yPercent, widthPercent, heightPercent, () -> {
+                            // This runs after screenshot is hidden
+                        });
+                    }
+                    return true;
+                }
+
                 float cornerX = squareX + squareSize;
                 float cornerY = squareY + squareSize;
                 float distanceToCorner = (float) Math.sqrt(
                     Math.pow(touchX - cornerX, 2) + Math.pow(touchY - cornerY, 2)
                 );
-                
+
                 if (distanceToCorner < CORNER_SIZE) {
                     isResizing = true;
                     isDragging = false;

@@ -2,6 +2,7 @@ package com.squareoverlay;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.media.projection.MediaProjectionManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -12,6 +13,7 @@ import android.widget.TextView;
 public class MainActivity extends Activity {
 
     private static final int REQUEST_CODE_OVERLAY_PERMISSION = 1000;
+    private static final int REQUEST_CODE_SCREEN_CAPTURE = 1001;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -41,9 +43,7 @@ public class MainActivity extends Activity {
         showButton.setText("Show Square");
         showButton.setOnClickListener(v -> {
             if (checkOverlayPermission()) {
-                Intent intent = new Intent(MainActivity.this, OverlayService.class);
-                intent.setAction("SHOW");
-                startService(intent);
+                requestScreenshotPermission();
             }
         });
         layout.addView(showButton);
@@ -75,6 +75,11 @@ public class MainActivity extends Activity {
         return true;
     }
 
+    private void requestScreenshotPermission() {
+        MediaProjectionManager projectionManager = (MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE);
+        startActivityForResult(projectionManager.createScreenCaptureIntent(), REQUEST_CODE_SCREEN_CAPTURE);
+    }
+
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
@@ -86,6 +91,25 @@ public class MainActivity extends Activity {
                     tv.setText("Overlay permission is required for this app to work!");
                     setContentView(tv);
                 }
+            }
+        } else if (requestCode == REQUEST_CODE_SCREEN_CAPTURE) {
+            if (resultCode == RESULT_OK) {
+                // Start overlay service
+                Intent serviceIntent = new Intent(MainActivity.this, OverlayService.class);
+                serviceIntent.setAction("SHOW");
+                startService(serviceIntent);
+
+                // Pass screenshot permission to service
+                Intent projectionIntent = new Intent(MainActivity.this, OverlayService.class);
+                projectionIntent.setAction("SET_PROJECTION");
+                projectionIntent.putExtra("resultCode", resultCode);
+                projectionIntent.putExtra("data", data);
+                startService(projectionIntent);
+            } else {
+                TextView tv = new TextView(this);
+                tv.setText("Screenshot permission is required to capture the square area!");
+                tv.setPadding(40, 40, 40, 40);
+                setContentView(tv);
             }
         }
     }
