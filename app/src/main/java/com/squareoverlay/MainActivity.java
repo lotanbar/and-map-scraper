@@ -31,6 +31,10 @@ public class MainActivity extends Activity {
         layout.addView(title);
         
         TextView instructions = new TextView(this);
+        instructions.setText("⚠️ IMPORTANT: Enable accessibility service in Settings > Accessibility > Square Overlay\n\nRequired for auto-scroll after screenshots!");
+        instructions.setTextSize(14);
+        instructions.setPadding(0, 0, 0, 30);
+        instructions.setTextColor(0xFFFF6600); // Orange color
         layout.addView(instructions);
         
         Button showButton = new Button(this);
