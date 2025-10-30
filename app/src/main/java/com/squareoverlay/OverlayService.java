@@ -21,6 +21,7 @@ public class OverlayService extends Service {
 
     private WindowManager windowManager;
     private SquareOverlayView overlayView;
+    private ScreenshotButtonView screenshotButton;
     private ScreenshotService screenshotService;
 
     @Override
@@ -139,16 +140,22 @@ public class OverlayService extends Service {
 
         overlayView.setScreenshotCallback((xPercent, yPercent, widthPercent, heightPercent, onHidden) -> {
             if (screenshotService != null) {
-                // Hide overlay
+                // Hide overlay and button
                 overlayView.setVisibility(android.view.View.INVISIBLE);
+                if (screenshotButton != null) {
+                    screenshotButton.setVisibility(android.view.View.INVISIBLE);
+                }
 
                 // Wait for UI to update, then capture
                 new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
                     screenshotService.captureScreenshot(xPercent, yPercent, widthPercent, heightPercent);
 
-                    // Show overlay again after capture
+                    // Show overlay and button again after capture
                     new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
                         overlayView.setVisibility(android.view.View.VISIBLE);
+                        if (screenshotButton != null) {
+                            screenshotButton.setVisibility(android.view.View.VISIBLE);
+                        }
                     }, 150);
                 }, 50);
             } else {
@@ -157,12 +164,46 @@ public class OverlayService extends Service {
         });
 
         windowManager.addView(overlayView, params);
+
+        // Create screenshot button at bottom center
+        screenshotButton = new ScreenshotButtonView(this);
+
+        int buttonLayoutType;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            buttonLayoutType = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
+        } else {
+            buttonLayoutType = WindowManager.LayoutParams.TYPE_PHONE;
+        }
+
+        WindowManager.LayoutParams buttonParams = new WindowManager.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                buttonLayoutType,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+                PixelFormat.TRANSLUCENT
+        );
+
+        buttonParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+        buttonParams.y = 350; // 350 pixels from bottom
+
+        screenshotButton.setOnClickListener(() -> {
+            if (overlayView != null) {
+                overlayView.triggerScreenshot();
+            }
+        });
+
+        windowManager.addView(screenshotButton, buttonParams);
     }
 
     private void hideOverlay() {
         if (overlayView != null && windowManager != null) {
             windowManager.removeView(overlayView);
             overlayView = null;
+        }
+        if (screenshotButton != null && windowManager != null) {
+            windowManager.removeView(screenshotButton);
+            screenshotButton = null;
         }
     }
 

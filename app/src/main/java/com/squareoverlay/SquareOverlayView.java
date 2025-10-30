@@ -37,14 +37,8 @@ public class SquareOverlayView extends View {
     private int initialWindowY;
     private boolean isDragging = false;
     
-    private static final int CORNER_SIZE = 80;
+    private static final int CORNER_SIZE = 160;
     private boolean isResizing = false;
-
-    private Paint buttonPaint;
-    private Paint buttonTextPaint;
-    private RectF screenshotButton;
-    private static final int BUTTON_SIZE = 100;
-    private static final int BUTTON_MARGIN = 10;
 
     public interface ScreenshotCallback {
         void onScreenshotRequested(float xPercent, float yPercent, float widthPercent, float heightPercent, Runnable onHidden);
@@ -80,19 +74,6 @@ public class SquareOverlayView extends View {
         textBackgroundPaint.setColor(Color.argb(200, 0, 0, 0));
         textBackgroundPaint.setStyle(Paint.Style.FILL);
 
-        buttonPaint = new Paint();
-        buttonPaint.setColor(Color.GREEN);
-        buttonPaint.setStyle(Paint.Style.FILL);
-        buttonPaint.setAntiAlias(true);
-
-        buttonTextPaint = new Paint();
-        buttonTextPaint.setColor(Color.WHITE);
-        buttonTextPaint.setTextSize(35);
-        buttonTextPaint.setAntiAlias(true);
-        buttonTextPaint.setTextAlign(Paint.Align.CENTER);
-
-        screenshotButton = new RectF();
-
         Log.d(TAG, "View created with square size: " + (int)squareSize);
     }
 
@@ -103,6 +84,19 @@ public class SquareOverlayView extends View {
     public void setWindowManager(WindowManager wm, WindowManager.LayoutParams params) {
         this.windowManager = wm;
         this.windowParams = params;
+    }
+
+    public void triggerScreenshot() {
+        if (screenshotCallback != null) {
+            float xPercent = (absoluteScreenX / screenWidth) * 100;
+            float yPercent = (absoluteScreenY / screenHeight) * 100;
+            float widthPercent = (squareSize / screenWidth) * 100;
+            float heightPercent = (squareSize / screenHeight) * 100;
+
+            screenshotCallback.onScreenshotRequested(xPercent, yPercent, widthPercent, heightPercent, () -> {
+                // This runs after screenshot is hidden
+            });
+        }
     }
 
     @Override
@@ -122,7 +116,7 @@ public class SquareOverlayView extends View {
         // Draw resize handle (reuse paint object)
         squarePaint.setStyle(Paint.Style.FILL);
         squarePaint.setColor(Color.BLUE);
-        canvas.drawCircle(squareX + squareSize, squareY + squareSize, 30, squarePaint);
+        canvas.drawCircle(squareX + squareSize, squareY + squareSize, 55, squarePaint);
         squarePaint.setColor(Color.RED);
         squarePaint.setStyle(Paint.Style.STROKE);
         
@@ -131,33 +125,25 @@ public class SquareOverlayView extends View {
             absoluteScreenY = windowParams.y + squareY;
         }
         
-        String coordText = String.format("X: %d  Y: %d\nSize: %dx%d\n\nPercentages:\nX: %.1f%%  Y: %.1f%%\nSize: %.1f%%",
-                (int)absoluteScreenX, (int)absoluteScreenY, (int)squareSize, (int)squareSize,
-                (absoluteScreenX / screenWidth) * 100,
-                (absoluteScreenY / screenHeight) * 100,
-                (squareSize / screenWidth) * 100);
-        
+        float xPercent = (absoluteScreenX / screenWidth) * 100;
+        float yPercent = (absoluteScreenY / screenHeight) * 100;
+        float sizePercent = (squareSize / screenWidth) * 100;
+
+        String line1 = String.format("Position: %d, %d", (int)absoluteScreenX, (int)absoluteScreenY);
+        String line2 = String.format("Size: %d x %d", (int)squareSize, (int)squareSize);
+        String line3 = String.format("Crop: %.1f%%, %.1f%%, %.1f%%", xPercent, yPercent, sizePercent);
+
         float textX = squareX + 20;
         float textY = squareY + 60;
-        
-        String[] lines = coordText.split("\n");
         float lineHeight = 50;
-        
-        float textWidth = 400;
-        float textHeight = lines.length * lineHeight + 20;
+
+        float textWidth = 380;
+        float textHeight = 3 * lineHeight + 20;
         canvas.drawRect(textX - 10, textY - 45, textX + textWidth, textY + textHeight - 45, textBackgroundPaint);
-        
-        for (int i = 0; i < lines.length; i++) {
-            canvas.drawText(lines[i], textX, textY + (i * lineHeight), textPaint);
-        }
 
-        // Draw screenshot button at top-right of square
-        float buttonX = squareX + squareSize - BUTTON_SIZE - BUTTON_MARGIN;
-        float buttonY = squareY + BUTTON_MARGIN;
-        screenshotButton.set(buttonX, buttonY, buttonX + BUTTON_SIZE, buttonY + BUTTON_SIZE);
-
-        canvas.drawRoundRect(screenshotButton, 10, 10, buttonPaint);
-        canvas.drawText("📷", screenshotButton.centerX(), screenshotButton.centerY() + 12, buttonTextPaint);
+        canvas.drawText(line1, textX, textY, textPaint);
+        canvas.drawText(line2, textX, textY + lineHeight, textPaint);
+        canvas.drawText(line3, textX, textY + lineHeight * 2, textPaint);
     }
 
     @Override
@@ -171,22 +157,6 @@ public class SquareOverlayView extends View {
         
         switch (event.getAction()) {
             case MotionEvent.ACTION_DOWN:
-                // Check screenshot button first
-                if (screenshotButton.contains(touchX, touchY)) {
-                    if (screenshotCallback != null) {
-                        float xPercent = (absoluteScreenX / screenWidth) * 100;
-                        float yPercent = (absoluteScreenY / screenHeight) * 100;
-                        float widthPercent = (squareSize / screenWidth) * 100;
-                        float heightPercent = (squareSize / screenHeight) * 100;
-
-                        // Hide overlay, capture, then show again
-                        screenshotCallback.onScreenshotRequested(xPercent, yPercent, widthPercent, heightPercent, () -> {
-                            // This runs after screenshot is hidden
-                        });
-                    }
-                    return true;
-                }
-
                 float cornerX = squareX + squareSize;
                 float cornerY = squareY + squareSize;
                 float distanceToCorner = (float) Math.sqrt(

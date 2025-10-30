@@ -31,12 +31,6 @@ public class MainActivity extends Activity {
         layout.addView(title);
         
         TextView instructions = new TextView(this);
-        instructions.setText("This app will display a draggable square overlay on your screen.\\n\\n" +
-                "1. Grant overlay permission\\n" +
-                "2. Press 'Show Square' button\\n" +
-                "3. Drag and resize the square\\n" +
-                "4. The coordinates will be displayed on the square");
-        instructions.setPadding(0, 0, 0, 40);
         layout.addView(instructions);
         
         Button showButton = new Button(this);
