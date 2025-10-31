@@ -37,15 +37,29 @@ public class MainActivity extends Activity {
         instructions.setTextColor(0xFFFF6600); // Orange color
         layout.addView(instructions);
         
+        Button accessibilityButton = new Button(this);
+        accessibilityButton.setText("Open Accessibility Settings");
+        accessibilityButton.setOnClickListener(v -> {
+            Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
+            startActivity(intent);
+        });
+        layout.addView(accessibilityButton);
+
         Button showButton = new Button(this);
         showButton.setText("Show Square");
         showButton.setOnClickListener(v -> {
             if (checkOverlayPermission()) {
+                // Check if accessibility service is enabled
+                if (!isAccessibilityServiceEnabled()) {
+                    android.widget.Toast.makeText(this,
+                        "⚠️ Accessibility service is NOT enabled!\nScroll won't work. Please enable it in Accessibility settings.",
+                        android.widget.Toast.LENGTH_LONG).show();
+                }
                 requestScreenshotPermission();
             }
         });
         layout.addView(showButton);
-        
+
         Button hideButton = new Button(this);
         hideButton.setText("Hide Square");
         hideButton.setOnClickListener(v -> {
@@ -71,6 +85,28 @@ public class MainActivity extends Activity {
             }
         }
         return true;
+    }
+
+    private boolean isAccessibilityServiceEnabled() {
+        String service = getPackageName() + "/" + ScrollAccessibilityService.class.getName();
+        try {
+            int accessibilityEnabled = Settings.Secure.getInt(
+                getContentResolver(),
+                Settings.Secure.ACCESSIBILITY_ENABLED
+            );
+            if (accessibilityEnabled == 1) {
+                String settingValue = Settings.Secure.getString(
+                    getContentResolver(),
+                    Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+                );
+                if (settingValue != null) {
+                    return settingValue.contains(service);
+                }
+            }
+        } catch (Settings.SettingNotFoundException e) {
+            return false;
+        }
+        return false;
     }
 
     private void requestScreenshotPermission() {

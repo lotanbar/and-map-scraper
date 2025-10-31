@@ -28,7 +28,7 @@ public class OverlayService extends Service {
     private CounterDisplayView counterDisplay;
     private ScreenshotService screenshotService;
     private int scrollDistance = 0; // Accumulated scroll distance in pixels
-    private static final int SCROLL_INCREMENT = 30; // Each +/- click scrolls 30 pixels
+    private static final int SCROLL_INCREMENT = 100; // Each +/- click scrolls 100 pixels
     private static final int MAX_SCROLL_DISTANCE = 1100; // Maximum scroll distance to avoid off-screen gestures
 
     @Override
@@ -470,8 +470,8 @@ public class OverlayService extends Service {
             int startX = gestureStartX;
             int endX = startX - distance; // distance can be positive or negative
 
-            // Quick gesture for small increments
-            int duration = 100;
+            // Slower gesture for better scroll recognition (300ms is typical for scroll gestures)
+            int duration = 300;
 
             android.util.Log.d("OverlayService", "Small scroll OUTSIDE square: (" + startX + "," + gestureY + ") to (" + endX + "," + gestureY + ")");
             accessibilityService.performHorizontalScroll(startX, gestureY, endX, gestureY, duration);
