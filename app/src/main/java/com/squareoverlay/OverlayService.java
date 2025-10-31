@@ -431,7 +431,7 @@ public class OverlayService extends Service {
         vTestParams.x = 0; // Same horizontal position as horizontal test button
 
         vTestButton.setOnClickListener(() -> {
-            // TODO: Add test functionality
+            performVerticalTest();
         });
 
         windowManager.addView(vTestButton, vTestParams);
@@ -1221,12 +1221,82 @@ public class OverlayService extends Service {
         }, 50);
     }
 
+    private void performVerticalTest() {
+        if (overlayView == null || screenshotService == null) {
+            Toast.makeText(this, "Not ready for test", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        ScrollAccessibilityService accessibilityService = ScrollAccessibilityService.getInstance();
+        if (accessibilityService == null) {
+            Toast.makeText(this, "Please enable Square Overlay accessibility service in Settings", Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        // Hide all UI elements for clean screenshot
+        setAllViewsVisible(false);
+
+        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+            // Get square coordinates
+            float xPercent = overlayView.getSquareXPercent();
+            float yPercent = overlayView.getSquareYPercent();
+            float widthPercent = overlayView.getSquareWidthPercent();
+            float heightPercent = overlayView.getSquareHeightPercent();
+
+            // Take first screenshot
+            screenshotService.captureTestScreenshot(xPercent, yPercent, widthPercent, heightPercent,
+                                                    "vertical test", "before.png");
+
+            // Wait for screenshot to complete, then scroll
+            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+                // Perform vertical scroll using the same method as goDownOneLine
+                try {
+                    DisplayMetrics displayMetrics = new DisplayMetrics();
+                    windowManager.getDefaultDisplay().getMetrics(displayMetrics);
+                    int screenWidth = displayMetrics.widthPixels;
+                    int screenHeight = displayMetrics.heightPixels;
+
+                    int centerX = screenWidth / 2;
+                    int centerY = screenHeight / 2;
+
+                    // Scroll down by verticalScrollDistance
+                    int verticalDistance = verticalScrollDistance;
+                    int startY = centerY + (verticalDistance / 2);
+                    int endY = centerY - (verticalDistance / 2);
+
+                    accessibilityService.performVerticalScroll(centerX, startY, centerX, endY, 500);
+                } catch (Exception e) {
+                }
+
+                // Wait for scroll to complete (500ms scroll duration + 600ms for momentum/settling)
+                new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+                    screenshotService.captureTestScreenshot(xPercent, yPercent, widthPercent, heightPercent,
+                                                            "vertical test", "after.png");
+
+                    // Wait for second screenshot to complete, then stitch
+                    new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+                        stitchTestImages("vertical test");
+                        setAllViewsVisible(true);
+                    }, 150);
+                }, 1100);
+            }, 150);
+        }, 50);
+    }
+
     private void stitchAndRotateTestImages() {
+        stitchTestImages("horizontal test", true);
+    }
+
+    private void stitchTestImages(String testFolder) {
+        stitchTestImages(testFolder, false);
+    }
+
+    private void stitchTestImages(String testFolder, boolean stitchHorizontally) {
         new Thread(() -> {
             try {
                 File picturesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES);
                 File appDir = new File(picturesDir, "SquareOverlay");
-                File testDir = new File(appDir, "horizontal test");
+                File testDir = new File(appDir, testFolder);
 
                 File beforeFile = new File(testDir, "before.png");
                 File afterFile = new File(testDir, "after.png");
@@ -1243,18 +1313,36 @@ public class OverlayService extends Service {
                     return;
                 }
 
-                // Stitch horizontally (side by side)
-                int totalWidth = beforeBitmap.getWidth() + afterBitmap.getWidth();
-                int maxHeight = Math.max(beforeBitmap.getHeight(), afterBitmap.getHeight());
+                android.graphics.Bitmap stitchedBitmap;
+                android.graphics.Canvas canvas;
 
-                android.graphics.Bitmap stitchedBitmap = android.graphics.Bitmap.createBitmap(
-                    totalWidth, maxHeight, android.graphics.Bitmap.Config.ARGB_8888);
-                android.graphics.Canvas canvas = new android.graphics.Canvas(stitchedBitmap);
+                if (stitchHorizontally) {
+                    // Stitch horizontally (side by side) - for horizontal test
+                    int totalWidth = beforeBitmap.getWidth() + afterBitmap.getWidth();
+                    int maxHeight = Math.max(beforeBitmap.getHeight(), afterBitmap.getHeight());
 
-                // Draw before image on the left
-                canvas.drawBitmap(beforeBitmap, 0, 0, null);
-                // Draw after image on the right
-                canvas.drawBitmap(afterBitmap, beforeBitmap.getWidth(), 0, null);
+                    stitchedBitmap = android.graphics.Bitmap.createBitmap(
+                        totalWidth, maxHeight, android.graphics.Bitmap.Config.ARGB_8888);
+                    canvas = new android.graphics.Canvas(stitchedBitmap);
+
+                    // Draw before image on the left
+                    canvas.drawBitmap(beforeBitmap, 0, 0, null);
+                    // Draw after image on the right
+                    canvas.drawBitmap(afterBitmap, beforeBitmap.getWidth(), 0, null);
+                } else {
+                    // Stitch vertically (before above, after below) - for vertical test
+                    int maxWidth = Math.max(beforeBitmap.getWidth(), afterBitmap.getWidth());
+                    int totalHeight = beforeBitmap.getHeight() + afterBitmap.getHeight();
+
+                    stitchedBitmap = android.graphics.Bitmap.createBitmap(
+                        maxWidth, totalHeight, android.graphics.Bitmap.Config.ARGB_8888);
+                    canvas = new android.graphics.Canvas(stitchedBitmap);
+
+                    // Draw before image on top
+                    canvas.drawBitmap(beforeBitmap, 0, 0, null);
+                    // Draw after image on bottom
+                    canvas.drawBitmap(afterBitmap, 0, beforeBitmap.getHeight(), null);
+                }
 
                 // Save stitched image
                 File stitchedFile = new File(testDir, "stitched.png");
@@ -1269,8 +1357,9 @@ public class OverlayService extends Service {
                 stitchedBitmap.recycle();
 
                 // Show success message and open the image on UI thread
+                String testName = testFolder.substring(0, 1).toUpperCase() + testFolder.substring(1);
                 new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
-                    Toast.makeText(OverlayService.this, "Horizontal test complete", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(OverlayService.this, testName + " complete", Toast.LENGTH_SHORT).show();
                     openImageFile(stitchedFile);
                 });
 
