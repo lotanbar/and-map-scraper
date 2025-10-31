@@ -27,10 +27,13 @@ public class OverlayService extends Service {
     private AdjustButtonView resetButton;
     private CounterDisplayView counterDisplay;
     private ScrollIncrementInputView scrollIncrementInput;
+    private NextLineButtonView nextLineButton;
     private ScreenshotService screenshotService;
     private int scrollDistance = 0; // Accumulated scroll distance in pixels
     private int scrollIncrement = 30; // Dynamic scroll increment, default 30 pixels
+    private int screenshotCount = 0; // Track number of screenshots taken (number of horizontal scrolls)
     private static final int MAX_SCROLL_DISTANCE = 1100; // Maximum scroll distance to avoid off-screen gestures
+    private static final int SCROLL_DELAY_MS = 600; // Delay between sequential scrolls to account for momentum
 
     @Override
     public IBinder onBind(Intent intent) {
@@ -168,10 +171,17 @@ public class OverlayService extends Service {
                 if (scrollIncrementInput != null) {
                     scrollIncrementInput.setVisibility(android.view.View.INVISIBLE);
                 }
+                if (nextLineButton != null) {
+                    nextLineButton.setVisibility(android.view.View.INVISIBLE);
+                }
 
                 // Wait for UI to update, then capture
                 new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
                     screenshotService.captureScreenshot(xPercent, yPercent, widthPercent, heightPercent);
+
+                    // Increment screenshot counter
+                    screenshotCount++;
+                    android.util.Log.d("OverlayService", "Screenshot taken, count now: " + screenshotCount);
 
                     // Scroll horizontally by the width of the square after screenshot
                     new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
@@ -197,6 +207,9 @@ public class OverlayService extends Service {
                             }
                             if (scrollIncrementInput != null) {
                                 scrollIncrementInput.setVisibility(android.view.View.VISIBLE);
+                            }
+                            if (nextLineButton != null) {
+                                nextLineButton.setVisibility(android.view.View.VISIBLE);
                             }
                         }, 150);
                     }, 150);
@@ -408,6 +421,35 @@ public class OverlayService extends Service {
         counterParams.x = -290; // Second position: Counter display (300px wide, center at -290)
 
         windowManager.addView(counterDisplay, counterParams);
+
+        // Create next line button (to the right of plus button)
+        nextLineButton = new NextLineButtonView(this);
+
+        int nextLineLayoutType;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            nextLineLayoutType = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
+        } else {
+            nextLineLayoutType = WindowManager.LayoutParams.TYPE_PHONE;
+        }
+
+        WindowManager.LayoutParams nextLineParams = new WindowManager.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                nextLineLayoutType,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+                PixelFormat.TRANSLUCENT
+        );
+
+        nextLineParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+        nextLineParams.y = 350; // Same row as screenshot button
+        nextLineParams.x = 250; // To the right of screenshot button
+
+        nextLineButton.setOnClickListener(() -> {
+            goDownOneLine();
+        });
+
+        windowManager.addView(nextLineButton, nextLineParams);
     }
 
     private void hideOverlay() {
@@ -438,6 +480,10 @@ public class OverlayService extends Service {
         if (scrollIncrementInput != null && windowManager != null) {
             windowManager.removeView(scrollIncrementInput);
             scrollIncrementInput = null;
+        }
+        if (nextLineButton != null && windowManager != null) {
+            windowManager.removeView(nextLineButton);
+            nextLineButton = null;
         }
     }
 
@@ -563,6 +609,100 @@ public class OverlayService extends Service {
             dialog.getWindow().setType(WindowManager.LayoutParams.TYPE_SYSTEM_ALERT);
         }
         dialog.show();
+    }
+
+    private void goDownOneLine() {
+        android.util.Log.d("OverlayService", "goDownOneLine called, screenshotCount=" + screenshotCount);
+
+        if (screenshotCount == 0) {
+            Toast.makeText(this, "No screenshots taken yet", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        ScrollAccessibilityService accessibilityService = ScrollAccessibilityService.getInstance();
+        if (accessibilityService == null) {
+            android.util.Log.e("OverlayService", "Accessibility service not enabled");
+            Toast.makeText(this, "Please enable Square Overlay accessibility service in Settings", Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        if (overlayView == null || windowManager == null) {
+            return;
+        }
+
+        try {
+            DisplayMetrics displayMetrics = new DisplayMetrics();
+            windowManager.getDefaultDisplay().getMetrics(displayMetrics);
+            int screenWidth = displayMetrics.widthPixels;
+            int screenHeight = displayMetrics.heightPixels;
+
+            // Perform gestures in the CENTER of the screen for consistent scroll distance
+            int centerX = screenWidth / 2;
+            int centerY = screenHeight / 2;
+
+            // First, scroll down by the square size (one line)
+            // Swipe UP to scroll DOWN content
+            int verticalDistance = scrollDistance;
+            int startY = centerY + (verticalDistance / 2);
+            int endY = centerY - (verticalDistance / 2);
+
+            android.util.Log.d("OverlayService", "Step 1: Scrolling down by " + verticalDistance + "px");
+            android.util.Log.d("OverlayService", "Vertical swipe from (" + centerX + "," + startY + ") to (" + centerX + "," + endY + ")");
+
+            accessibilityService.performVerticalScroll(centerX, startY, centerX, endY, 500);
+
+            // Wait for vertical scroll to complete with momentum before starting horizontal scrolls
+            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+                // Now scroll left, one scroll at a time with delays
+                scrollLeftSequentially(0, screenshotCount);
+            }, SCROLL_DELAY_MS);
+
+        } catch (Exception e) {
+            android.util.Log.e("OverlayService", "Failed to go down one line: " + e.getMessage(), e);
+        }
+    }
+
+    private void scrollLeftSequentially(int currentScroll, int totalScrolls) {
+        if (currentScroll >= totalScrolls) {
+            // Done with all scrolls, reset screenshot counter
+            android.util.Log.d("OverlayService", "All left scrolls completed, resetting screenshot counter");
+            screenshotCount = 0;
+            Toast.makeText(this, "Moved to next line", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        android.util.Log.d("OverlayService", "Left scroll " + (currentScroll + 1) + " of " + totalScrolls);
+
+        ScrollAccessibilityService accessibilityService = ScrollAccessibilityService.getInstance();
+        if (accessibilityService == null || windowManager == null) {
+            return;
+        }
+
+        try {
+            // Perform gestures in the CENTER of the screen for consistent scroll distance
+            DisplayMetrics displayMetrics = new DisplayMetrics();
+            windowManager.getDefaultDisplay().getMetrics(displayMetrics);
+            int screenWidth = displayMetrics.widthPixels;
+            int screenHeight = displayMetrics.heightPixels;
+
+            int centerX = screenWidth / 2;
+            int centerY = screenHeight / 2;
+
+            // Swipe RIGHT to scroll LEFT (back to beginning of line)
+            int startX = centerX - (scrollDistance / 2);
+            int endX = centerX + (scrollDistance / 2);
+
+            android.util.Log.d("OverlayService", "Left scroll from (" + startX + "," + centerY + ") to (" + endX + "," + centerY + ")");
+            accessibilityService.performHorizontalScroll(startX, centerY, endX, centerY, 500);
+
+            // Wait for scroll to complete with momentum, then do next scroll
+            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+                scrollLeftSequentially(currentScroll + 1, totalScrolls);
+            }, SCROLL_DELAY_MS);
+
+        } catch (Exception e) {
+            android.util.Log.e("OverlayService", "Failed to scroll left: " + e.getMessage(), e);
+        }
     }
 
     @Override

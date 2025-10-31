@@ -70,4 +70,36 @@ public class ScrollAccessibilityService extends AccessibilityService {
             Log.e(TAG, "Gesture dispatch requires Android N or higher");
         }
     }
+
+    public void performVerticalScroll(int startX, int startY, int endX, int endY, int durationMs) {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+            Path path = new Path();
+            path.moveTo(startX, startY);
+            path.lineTo(endX, endY);
+
+            GestureDescription.StrokeDescription stroke = new GestureDescription.StrokeDescription(
+                path, 0, durationMs
+            );
+
+            GestureDescription.Builder builder = new GestureDescription.Builder();
+            builder.addStroke(stroke);
+
+            boolean dispatched = dispatchGesture(builder.build(), new GestureResultCallback() {
+                @Override
+                public void onCompleted(GestureDescription gestureDescription) {
+                    Log.d(TAG, "Vertical scroll gesture completed successfully");
+                }
+
+                @Override
+                public void onCancelled(GestureDescription gestureDescription) {
+                    Log.e(TAG, "Vertical scroll gesture cancelled");
+                }
+            }, null);
+
+            Log.d(TAG, "Vertical scroll gesture dispatched: " + dispatched +
+                " from (" + startX + "," + startY + ") to (" + endX + "," + endY + ")");
+        } else {
+            Log.e(TAG, "Gesture dispatch requires Android N or higher");
+        }
+    }
 }
