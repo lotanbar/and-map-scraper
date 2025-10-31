@@ -43,7 +43,7 @@ public class OverlayService extends Service {
 
     // Default values
     private static final int DEFAULT_SCROLL_DISTANCE = 773;
-    private static final int DEFAULT_VERTICAL_SCROLL_DISTANCE = 773;
+    private static final int DEFAULT_VERTICAL_SCROLL_DISTANCE = 718;
     private static final float DEFAULT_SQUARE_SIZE = 695f;
     private static final int DEFAULT_SQUARE_X = 346;
     private static final int DEFAULT_SQUARE_Y = 346;
@@ -1315,6 +1315,9 @@ public class OverlayService extends Service {
 
                 android.graphics.Bitmap stitchedBitmap;
                 android.graphics.Canvas canvas;
+                android.graphics.Paint linePaint = new android.graphics.Paint();
+                linePaint.setColor(android.graphics.Color.RED);
+                linePaint.setStrokeWidth(3);
 
                 if (stitchHorizontally) {
                     // Stitch horizontally (side by side) - for horizontal test
@@ -1329,6 +1332,10 @@ public class OverlayService extends Service {
                     canvas.drawBitmap(beforeBitmap, 0, 0, null);
                     // Draw after image on the right
                     canvas.drawBitmap(afterBitmap, beforeBitmap.getWidth(), 0, null);
+
+                    // Draw vertical line at stitch point
+                    int stitchX = beforeBitmap.getWidth();
+                    canvas.drawLine(stitchX, 0, stitchX, maxHeight, linePaint);
                 } else {
                     // Stitch vertically (before above, after below) - for vertical test
                     int maxWidth = Math.max(beforeBitmap.getWidth(), afterBitmap.getWidth());
@@ -1342,6 +1349,10 @@ public class OverlayService extends Service {
                     canvas.drawBitmap(beforeBitmap, 0, 0, null);
                     // Draw after image on bottom
                     canvas.drawBitmap(afterBitmap, 0, beforeBitmap.getHeight(), null);
+
+                    // Draw horizontal line at stitch point
+                    int stitchY = beforeBitmap.getHeight();
+                    canvas.drawLine(0, stitchY, maxWidth, stitchY, linePaint);
                 }
 
                 // Save stitched image
