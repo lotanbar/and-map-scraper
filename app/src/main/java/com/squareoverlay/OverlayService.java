@@ -45,8 +45,8 @@ public class OverlayService extends Service {
     private static final int DEFAULT_SCROLL_DISTANCE = 773;
     private static final int DEFAULT_VERTICAL_SCROLL_DISTANCE = 773;
     private static final float DEFAULT_SQUARE_SIZE = 695f;
-    private static final int DEFAULT_SQUARE_X = 338;
-    private static final int DEFAULT_SQUARE_Y = 117;
+    private static final int DEFAULT_SQUARE_X = 346;
+    private static final int DEFAULT_SQUARE_Y = 346;
 
     private int scrollDistance = DEFAULT_SCROLL_DISTANCE; // Horizontal scroll distance in pixels
     private int verticalScrollDistance = DEFAULT_VERTICAL_SCROLL_DISTANCE; // Vertical scroll distance in pixels
@@ -493,7 +493,7 @@ public class OverlayService extends Service {
         hTestParams.x = 0; // Third position: Test button (200px wide, centered at 0)
 
         hTestButton.setOnClickListener(() -> {
-            // TODO: Add test functionality
+            performHorizontalTest();
         });
 
         windowManager.addView(hTestButton, hTestParams);
@@ -1179,6 +1179,132 @@ public class OverlayService extends Service {
                 });
             }
         }).start();
+    }
+
+    private void performHorizontalTest() {
+        if (overlayView == null || screenshotService == null) {
+            Toast.makeText(this, "Not ready for test", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        // Hide all UI elements for clean screenshot
+        setAllViewsVisible(false);
+
+        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+            // Get square coordinates
+            float xPercent = overlayView.getSquareXPercent();
+            float yPercent = overlayView.getSquareYPercent();
+            float widthPercent = overlayView.getSquareWidthPercent();
+            float heightPercent = overlayView.getSquareHeightPercent();
+
+            // Take first screenshot
+            screenshotService.captureTestScreenshot(xPercent, yPercent, widthPercent, heightPercent,
+                                                    "horizontal test", "before.png");
+
+            // Wait for screenshot to complete, then scroll
+            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+                // Perform horizontal scroll using the SAME method as screenshot button
+                scrollHorizontallyBySquareWidth();
+
+                // Wait for scroll to complete (500ms scroll duration + 600ms for momentum/settling)
+                new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+                    screenshotService.captureTestScreenshot(xPercent, yPercent, widthPercent, heightPercent,
+                                                            "horizontal test", "after.png");
+
+                    // Wait for second screenshot to complete, then stitch and rotate
+                    new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+                        stitchAndRotateTestImages();
+                        setAllViewsVisible(true);
+                    }, 150);
+                }, 1100);
+            }, 150);
+        }, 50);
+    }
+
+    private void stitchAndRotateTestImages() {
+        new Thread(() -> {
+            try {
+                File picturesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES);
+                File appDir = new File(picturesDir, "SquareOverlay");
+                File testDir = new File(appDir, "horizontal test");
+
+                File beforeFile = new File(testDir, "before.png");
+                File afterFile = new File(testDir, "after.png");
+
+                if (!beforeFile.exists() || !afterFile.exists()) {
+                    return;
+                }
+
+                // Load the two images
+                android.graphics.Bitmap beforeBitmap = android.graphics.BitmapFactory.decodeFile(beforeFile.getAbsolutePath());
+                android.graphics.Bitmap afterBitmap = android.graphics.BitmapFactory.decodeFile(afterFile.getAbsolutePath());
+
+                if (beforeBitmap == null || afterBitmap == null) {
+                    return;
+                }
+
+                // Stitch horizontally (side by side)
+                int totalWidth = beforeBitmap.getWidth() + afterBitmap.getWidth();
+                int maxHeight = Math.max(beforeBitmap.getHeight(), afterBitmap.getHeight());
+
+                android.graphics.Bitmap stitchedBitmap = android.graphics.Bitmap.createBitmap(
+                    totalWidth, maxHeight, android.graphics.Bitmap.Config.ARGB_8888);
+                android.graphics.Canvas canvas = new android.graphics.Canvas(stitchedBitmap);
+
+                // Draw before image on the left
+                canvas.drawBitmap(beforeBitmap, 0, 0, null);
+                // Draw after image on the right
+                canvas.drawBitmap(afterBitmap, beforeBitmap.getWidth(), 0, null);
+
+                // Save stitched image
+                File stitchedFile = new File(testDir, "stitched.png");
+                java.io.FileOutputStream fos = new java.io.FileOutputStream(stitchedFile);
+                stitchedBitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, fos);
+                fos.flush();
+                fos.close();
+
+                // Clean up
+                beforeBitmap.recycle();
+                afterBitmap.recycle();
+                stitchedBitmap.recycle();
+
+                // Show success message and open the image on UI thread
+                new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+                    Toast.makeText(OverlayService.this, "Horizontal test complete", Toast.LENGTH_SHORT).show();
+                    openImageFile(stitchedFile);
+                });
+
+            } catch (Exception e) {
+                new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+                    Toast.makeText(OverlayService.this, "Stitching failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                });
+            }
+        }).start();
+    }
+
+    private void openImageFile(File imageFile) {
+        try {
+            android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_VIEW);
+            android.net.Uri uri;
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                // Use FileProvider for Android N and above
+                uri = androidx.core.content.FileProvider.getUriForFile(
+                    this,
+                    getPackageName() + ".fileprovider",
+                    imageFile
+                );
+                intent.addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            } else {
+                uri = android.net.Uri.fromFile(imageFile);
+            }
+
+            intent.setDataAndType(uri, "image/*");
+            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(intent);
+        } catch (Exception e) {
+            Toast.makeText(this, "Could not open image: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+        }
     }
 
     private void setAllViewsVisible(boolean visible) {

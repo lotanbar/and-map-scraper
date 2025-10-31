@@ -99,6 +99,28 @@ public class SquareOverlayView extends View {
         invalidate();
     }
 
+    public float getSquareXPercent() {
+        if (windowParams != null) {
+            absoluteScreenX = windowParams.x + squareX;
+        }
+        return (absoluteScreenX / screenWidth) * 100;
+    }
+
+    public float getSquareYPercent() {
+        if (windowParams != null) {
+            absoluteScreenY = windowParams.y + squareY;
+        }
+        return (absoluteScreenY / screenHeight) * 100;
+    }
+
+    public float getSquareWidthPercent() {
+        return (squareSize / screenWidth) * 100;
+    }
+
+    public float getSquareHeightPercent() {
+        return (squareSize / screenHeight) * 100;
+    }
+
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         int width = (int)squareSize;

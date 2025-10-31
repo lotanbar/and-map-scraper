@@ -160,6 +160,92 @@ public class ScreenshotService {
         }
     }
 
+    private void saveBitmapToTestFolder(Bitmap bitmap, String subfolder, String filename) {
+        try {
+            File picturesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES);
+            File appDir = new File(picturesDir, "SquareOverlay");
+            File testDir = new File(appDir, subfolder);
+
+            if (!testDir.exists()) {
+                testDir.mkdirs();
+            }
+
+            File file = new File(testDir, filename);
+
+            FileOutputStream fos = new FileOutputStream(file);
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, fos);
+            fos.flush();
+            fos.close();
+        } catch (Exception e) {
+        }
+    }
+
+    public void captureTestScreenshot(float xPercent, float yPercent, float widthPercent, float heightPercent, String subfolder, String filename) {
+        if (mediaProjection == null || virtualDisplay == null || imageReader == null) {
+            Toast.makeText(context, "Screenshot not ready, please wait...", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        if (isCapturing) {
+            Toast.makeText(context, "Please wait, capturing...", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        isCapturing = true;
+
+        new Handler(Looper.getMainLooper()).postDelayed(() -> {
+            Image image = null;
+            Bitmap bitmap = null;
+
+            try {
+                image = imageReader.acquireLatestImage();
+
+                if (image != null) {
+                    Image.Plane[] planes = image.getPlanes();
+                    ByteBuffer buffer = planes[0].getBuffer();
+                    int pixelStride = planes[0].getPixelStride();
+                    int rowStride = planes[0].getRowStride();
+                    int rowPadding = rowStride - pixelStride * screenWidth;
+
+                    bitmap = Bitmap.createBitmap(
+                            screenWidth + rowPadding / pixelStride,
+                            screenHeight,
+                            Bitmap.Config.ARGB_8888
+                    );
+                    bitmap.copyPixelsFromBuffer(buffer);
+
+                    int cropX = (int) ((xPercent / 100) * screenWidth);
+                    int cropY = (int) ((yPercent / 100) * screenHeight);
+                    int cropWidth = (int) ((widthPercent / 100) * screenWidth);
+                    int cropHeight = (int) ((heightPercent / 100) * screenHeight);
+
+                    cropX = Math.max(0, Math.min(cropX, screenWidth - 1));
+                    cropY = Math.max(0, Math.min(cropY, screenHeight - 1));
+                    cropWidth = Math.min(cropWidth, screenWidth - cropX);
+                    cropHeight = Math.min(cropHeight, screenHeight - cropY);
+
+                    Bitmap croppedBitmap = Bitmap.createBitmap(bitmap, cropX, cropY, cropWidth, cropHeight);
+
+                    saveBitmapToTestFolder(croppedBitmap, subfolder, filename);
+
+                    croppedBitmap.recycle();
+
+                    Toast.makeText(context, "Test screenshot saved", Toast.LENGTH_SHORT).show();
+                }
+            } catch (Exception e) {
+                Toast.makeText(context, "Screenshot failed: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            } finally {
+                if (bitmap != null) {
+                    bitmap.recycle();
+                }
+                if (image != null) {
+                    image.close();
+                }
+                isCapturing = false;
+            }
+        }, 100);
+    }
+
     private void cleanup() {
         if (virtualDisplay != null) {
             virtualDisplay.release();
