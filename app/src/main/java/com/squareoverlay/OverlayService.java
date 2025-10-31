@@ -57,6 +57,8 @@ public class OverlayService extends Service {
     private boolean nextScreenshotIsLineStart = false; // Flag to mark next screenshot with 'z' suffix
     private static final int MAX_SCROLL_DISTANCE = 1100; // Maximum scroll distance to avoid off-screen gestures
     private static final int SCROLL_DELAY_MS = 600; // Delay between sequential scrolls to account for momentum
+    private int multiScreenshotCount = 1; // Number of screenshots to take on next click (default 1)
+    private boolean isMultiScreenshotInProgress = false; // Flag to prevent re-entry during multi-screenshot
 
     @Override
     public IBinder onBind(Intent intent) {
@@ -223,9 +225,22 @@ public class OverlayService extends Service {
         buttonParams.x = 270; // Screenshot center in centered group
 
         screenshotButton.setOnClickListener(() -> {
-            if (overlayView != null) {
-                overlayView.triggerScreenshot();
+            if (overlayView != null && !isMultiScreenshotInProgress) {
+                if (multiScreenshotCount > 1) {
+                    // Perform multiple screenshots
+                    isMultiScreenshotInProgress = true;
+                    performMultipleScreenshotsRecursive(0, multiScreenshotCount);
+                } else {
+                    // Single screenshot
+                    overlayView.triggerScreenshot();
+                }
             }
+        });
+
+        // Add long-click listener for multi-screenshot mode (2 seconds)
+        screenshotButton.setOnLongClickListener(() -> {
+            showMultiScreenshotDialog();
+            return true;
         });
 
         windowManager.addView(screenshotButton, buttonParams);
@@ -571,7 +586,7 @@ public class OverlayService extends Service {
 
         nextLineParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
         nextLineParams.y = 200; // Same row as screenshot button
-        nextLineParams.x = -40; // Go down center in centered group
+        nextLineParams.x = -540; // Go down center in centered group
 
         nextLineButton.setOnClickListener(() -> {
             // Mark next screenshot to have 'z' suffix
@@ -602,7 +617,7 @@ public class OverlayService extends Service {
 
         resetParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
         resetParams.y = 200; // Same row as screenshot button
-        resetParams.x = -540; // Reset center in centered group
+        resetParams.x = -40; // Reset center in centered group
 
         resetButton.setOnClickListener(() -> {
             // Reset scroll distances to defaults
@@ -1467,6 +1482,62 @@ public class OverlayService extends Service {
             dialog.getWindow().setType(WindowManager.LayoutParams.TYPE_SYSTEM_ALERT);
         }
         dialog.show();
+    }
+
+    private void showMultiScreenshotDialog() {
+        android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert);
+        builder.setTitle("Set Screenshot Count");
+
+        final android.widget.EditText input = new android.widget.EditText(this);
+        input.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        input.setText(String.valueOf(multiScreenshotCount));
+        input.setSelection(input.getText().length());
+        builder.setView(input);
+
+        builder.setPositiveButton("OK", (dialog, which) -> {
+            try {
+                int count = Integer.parseInt(input.getText().toString());
+                if (count > 0 && count <= 100) {
+                    multiScreenshotCount = count;
+                    Toast.makeText(this, "Next click will take " + count + " screenshot" + (count > 1 ? "s" : ""), Toast.LENGTH_SHORT).show();
+                } else {
+                    Toast.makeText(this, "Please enter a number between 1 and 100", Toast.LENGTH_SHORT).show();
+                }
+            } catch (NumberFormatException e) {
+                Toast.makeText(this, "Invalid number", Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        builder.setNegativeButton("Cancel", (dialog, which) -> dialog.cancel());
+
+        android.app.AlertDialog dialog = builder.create();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            dialog.getWindow().setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY);
+        } else {
+            dialog.getWindow().setType(WindowManager.LayoutParams.TYPE_SYSTEM_ALERT);
+        }
+        dialog.show();
+    }
+
+    private void performMultipleScreenshotsRecursive(int current, int total) {
+        if (current >= total) {
+            isMultiScreenshotInProgress = false;
+            Toast.makeText(this, "Completed " + total + " screenshot" + (total > 1 ? "s" : ""), Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        if (overlayView != null) {
+            overlayView.triggerScreenshot();
+
+            // Wait for this screenshot to complete before starting the next one
+            // Total time per screenshot: 50ms + 100ms (capture) + 150ms + 500ms (scroll) + 600ms (settle) + 150ms = 1550ms
+            // Adding buffer for safety: 2000ms
+            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+                performMultipleScreenshotsRecursive(current + 1, total);
+            }, 2000);
+        } else {
+            isMultiScreenshotInProgress = false;
+        }
     }
 
     @Override

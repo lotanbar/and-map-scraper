@@ -31,12 +31,20 @@ public abstract class BaseButtonView extends View {
     private Handler longPressHandler = new Handler(Looper.getMainLooper());
     private Runnable longPressRunnable;
     private Runnable repeatRunnable;
+    private Runnable customLongClickRunnable;
+    private boolean longClickTriggered = false;
 
     public interface OnClickListener {
         void onClick();
     }
 
+    public interface OnLongClickListener {
+        boolean onLongClick();
+    }
+
     protected OnClickListener clickListener;
+    protected OnLongClickListener longClickListener;
+    private static final int CUSTOM_LONG_PRESS_DELAY = 2000;
 
     public BaseButtonView(Context context, int width, int height, int cornerRadius) {
         this(context, width, height, cornerRadius, false);
@@ -84,6 +92,10 @@ public abstract class BaseButtonView extends View {
 
     public void setOnClickListener(OnClickListener listener) {
         this.clickListener = listener;
+    }
+
+    public void setOnLongClickListener(OnLongClickListener listener) {
+        this.longClickListener = listener;
     }
 
     @Override
@@ -141,10 +153,20 @@ public abstract class BaseButtonView extends View {
             case MotionEvent.ACTION_DOWN:
                 if (buttonRect.contains(touchX, touchY)) {
                     isPressed = true;
+                    longClickTriggered = false;
                     invalidate();
 
                     if (enableLongPress) {
                         longPressHandler.postDelayed(longPressRunnable, LONG_PRESS_DELAY);
+                    }
+
+                    // Set up custom long click listener (3 seconds)
+                    if (longClickListener != null) {
+                        customLongClickRunnable = () -> {
+                            longClickTriggered = true;
+                            longClickListener.onLongClick();
+                        };
+                        longPressHandler.postDelayed(customLongClickRunnable, CUSTOM_LONG_PRESS_DELAY);
                     }
 
                     return true;
@@ -156,6 +178,12 @@ public abstract class BaseButtonView extends View {
                     isPressed = false;
                     invalidate();
 
+                    // Cancel custom long click if set
+                    if (customLongClickRunnable != null) {
+                        longPressHandler.removeCallbacks(customLongClickRunnable);
+                        customLongClickRunnable = null;
+                    }
+
                     if (enableLongPress) {
                         boolean wasLongPress = repeatRunnable != null;
                         longPressHandler.removeCallbacks(longPressRunnable);
@@ -164,11 +192,11 @@ public abstract class BaseButtonView extends View {
                             repeatRunnable = null;
                         }
 
-                        if (!wasLongPress && buttonRect.contains(touchX, touchY) && clickListener != null) {
+                        if (!wasLongPress && !longClickTriggered && buttonRect.contains(touchX, touchY) && clickListener != null) {
                             clickListener.onClick();
                         }
                     } else {
-                        if (buttonRect.contains(touchX, touchY) && clickListener != null) {
+                        if (!longClickTriggered && buttonRect.contains(touchX, touchY) && clickListener != null) {
                             clickListener.onClick();
                         }
                     }
@@ -180,6 +208,12 @@ public abstract class BaseButtonView extends View {
             case MotionEvent.ACTION_CANCEL:
                 isPressed = false;
                 invalidate();
+
+                // Cancel custom long click if set
+                if (customLongClickRunnable != null) {
+                    longPressHandler.removeCallbacks(customLongClickRunnable);
+                    customLongClickRunnable = null;
+                }
 
                 if (enableLongPress) {
                     longPressHandler.removeCallbacks(longPressRunnable);
