@@ -27,10 +27,11 @@ public class OverlayService extends Service {
     private ScreenshotButtonView screenshotButton;
     private AdjustButtonView minusButton;
     private AdjustButtonView plusButton;
-    private AdjustButtonView resetButton;
     private AdjustButtonView vMinusButton;
     private AdjustButtonView vPlusButton;
-    private AdjustButtonView vResetButton;
+    private ResetButtonView resetButton;
+    private TestButtonView hTestButton;
+    private TestButtonView vTestButton;
     private CounterDisplayView counterDisplay;
     private CounterDisplayView vCounterDisplay;
     private ScrollIncrementInputView scrollIncrementInput;
@@ -219,7 +220,7 @@ public class OverlayService extends Service {
 
         buttonParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
         buttonParams.y = 200; // Larger gap - closer to bottom
-        buttonParams.x = (280 + 40) / 2; // Half of (camera width + gap) = 160
+        buttonParams.x = 270; // Screenshot center in centered group
 
         screenshotButton.setOnClickListener(() -> {
             if (overlayView != null) {
@@ -373,39 +374,6 @@ public class OverlayService extends Service {
 
         windowManager.addView(vPlusButton, vPlusParams);
 
-        // Create vertical reset button
-        vResetButton = new AdjustButtonView(this, "VR");
-
-        int vResetLayoutType;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            vResetLayoutType = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
-        } else {
-            vResetLayoutType = WindowManager.LayoutParams.TYPE_PHONE;
-        }
-
-        WindowManager.LayoutParams vResetParams = new WindowManager.LayoutParams(
-                WindowManager.LayoutParams.WRAP_CONTENT,
-                WindowManager.LayoutParams.WRAP_CONTENT,
-                vResetLayoutType,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
-                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
-                PixelFormat.TRANSLUCENT
-        );
-
-        vResetParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
-        vResetParams.y = 650; // Vertical calibration row
-        vResetParams.x = 0; // Same horizontal position as reset button
-
-        vResetButton.setOnClickListener(() -> {
-            // Reset vertical scroll distance to default
-            verticalScrollDistance = DEFAULT_VERTICAL_SCROLL_DISTANCE;
-            if (vCounterDisplay != null) {
-                vCounterDisplay.setCounter(verticalScrollDistance);
-            }
-        });
-
-        windowManager.addView(vResetButton, vResetParams);
-
         // Create vertical scroll increment input
         vScrollIncrementInput = new ScrollIncrementInputView(this);
         vScrollIncrementInput.setValue(verticalScrollIncrement); // Set default value
@@ -439,64 +407,36 @@ public class OverlayService extends Service {
 
         windowManager.addView(vScrollIncrementInput, vInputParams);
 
-        // Create reset button (above screenshot button)
-        resetButton = new AdjustButtonView(this, "R");
+        // Create vertical test button
+        vTestButton = new TestButtonView(this);
 
-        int resetLayoutType;
+        int vTestLayoutType;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            resetLayoutType = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
+            vTestLayoutType = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
         } else {
-            resetLayoutType = WindowManager.LayoutParams.TYPE_PHONE;
+            vTestLayoutType = WindowManager.LayoutParams.TYPE_PHONE;
         }
 
-        WindowManager.LayoutParams resetParams = new WindowManager.LayoutParams(
+        WindowManager.LayoutParams vTestParams = new WindowManager.LayoutParams(
                 WindowManager.LayoutParams.WRAP_CONTENT,
                 WindowManager.LayoutParams.WRAP_CONTENT,
-                resetLayoutType,
+                vTestLayoutType,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
                 WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
                 PixelFormat.TRANSLUCENT
         );
 
-        resetParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
-        resetParams.y = 450; // Horizontal calibration row (middle row)
-        resetParams.x = 0; // Third position: Reset button (200px wide, centered at 0)
+        vTestParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+        vTestParams.y = 650; // Vertical calibration row (top row)
+        vTestParams.x = 0; // Same horizontal position as horizontal test button
 
-        resetButton.setOnClickListener(() -> {
-            // Reset scroll distances to defaults
-            scrollDistance = DEFAULT_SCROLL_DISTANCE;
-            verticalScrollDistance = DEFAULT_VERTICAL_SCROLL_DISTANCE;
-            if (counterDisplay != null) {
-                counterDisplay.setCounter(scrollDistance);
-            }
-            if (vCounterDisplay != null) {
-                vCounterDisplay.setCounter(verticalScrollDistance);
-            }
-
-            // Reset square position and size to defaults
-            if (overlayView != null && windowManager != null) {
-                WindowManager.LayoutParams overlayParams = (WindowManager.LayoutParams) overlayView.getLayoutParams();
-                if (overlayParams != null) {
-                    // Reset position
-                    overlayParams.x = DEFAULT_SQUARE_X;
-                    overlayParams.y = DEFAULT_SQUARE_Y;
-
-                    // Reset size
-                    overlayParams.width = (int) DEFAULT_SQUARE_SIZE;
-                    overlayParams.height = (int) DEFAULT_SQUARE_SIZE;
-
-                    // Apply changes
-                    windowManager.updateViewLayout(overlayView, overlayParams);
-
-                    // Reset the overlay view's internal size
-                    overlayView.setSquareSize(DEFAULT_SQUARE_SIZE);
-                }
-            }
+        vTestButton.setOnClickListener(() -> {
+            // TODO: Add test functionality
         });
 
-        windowManager.addView(resetButton, resetParams);
+        windowManager.addView(vTestButton, vTestParams);
 
-        // Create scroll increment input (to the left of reset button)
+        // Create scroll increment input (to the left of minus button)
         scrollIncrementInput = new ScrollIncrementInputView(this);
         scrollIncrementInput.setValue(scrollIncrement); // Set default value
 
@@ -528,6 +468,35 @@ public class OverlayService extends Service {
         });
 
         windowManager.addView(scrollIncrementInput, inputParams);
+
+        // Create horizontal test button
+        hTestButton = new TestButtonView(this);
+
+        int hTestLayoutType;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            hTestLayoutType = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
+        } else {
+            hTestLayoutType = WindowManager.LayoutParams.TYPE_PHONE;
+        }
+
+        WindowManager.LayoutParams hTestParams = new WindowManager.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                hTestLayoutType,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+                PixelFormat.TRANSLUCENT
+        );
+
+        hTestParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+        hTestParams.y = 450; // Horizontal calibration row (middle row)
+        hTestParams.x = 0; // Third position: Test button (200px wide, centered at 0)
+
+        hTestButton.setOnClickListener(() -> {
+            // TODO: Add test functionality
+        });
+
+        windowManager.addView(hTestButton, hTestParams);
 
         // Create counter display above the button row
         counterDisplay = new CounterDisplayView(this);
@@ -602,7 +571,7 @@ public class OverlayService extends Service {
 
         nextLineParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
         nextLineParams.y = 200; // Same row as screenshot button
-        nextLineParams.x = -((280 + 40) / 2); // Half of (camera width + gap) = -160
+        nextLineParams.x = -40; // Go down center in centered group
 
         nextLineButton.setOnClickListener(() -> {
             // Mark next screenshot to have 'z' suffix
@@ -612,7 +581,74 @@ public class OverlayService extends Service {
 
         windowManager.addView(nextLineButton, nextLineParams);
 
-        // Create file browser button (to the right of next line button)
+        // Create reset button (to the left of file browser button)
+        resetButton = new ResetButtonView(this);
+
+        int resetLayoutType;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            resetLayoutType = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
+        } else {
+            resetLayoutType = WindowManager.LayoutParams.TYPE_PHONE;
+        }
+
+        WindowManager.LayoutParams resetParams = new WindowManager.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                resetLayoutType,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+                PixelFormat.TRANSLUCENT
+        );
+
+        resetParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+        resetParams.y = 200; // Same row as screenshot button
+        resetParams.x = -540; // Reset center in centered group
+
+        resetButton.setOnClickListener(() -> {
+            // Reset scroll distances to defaults
+            scrollDistance = DEFAULT_SCROLL_DISTANCE;
+            verticalScrollDistance = DEFAULT_VERTICAL_SCROLL_DISTANCE;
+            if (counterDisplay != null) {
+                counterDisplay.setCounter(scrollDistance);
+            }
+            if (vCounterDisplay != null) {
+                vCounterDisplay.setCounter(verticalScrollDistance);
+            }
+
+            // Reset scroll increments to defaults
+            scrollIncrement = 30;
+            verticalScrollIncrement = 30;
+            if (scrollIncrementInput != null) {
+                scrollIncrementInput.setValue(scrollIncrement);
+            }
+            if (vScrollIncrementInput != null) {
+                vScrollIncrementInput.setValue(verticalScrollIncrement);
+            }
+
+            // Reset square position and size to defaults
+            if (overlayView != null && windowManager != null) {
+                WindowManager.LayoutParams overlayParams = (WindowManager.LayoutParams) overlayView.getLayoutParams();
+                if (overlayParams != null) {
+                    // Reset position
+                    overlayParams.x = DEFAULT_SQUARE_X;
+                    overlayParams.y = DEFAULT_SQUARE_Y;
+
+                    // Reset size
+                    overlayParams.width = (int) DEFAULT_SQUARE_SIZE;
+                    overlayParams.height = (int) DEFAULT_SQUARE_SIZE;
+
+                    // Apply changes
+                    windowManager.updateViewLayout(overlayView, overlayParams);
+
+                    // Reset the overlay view's internal size
+                    overlayView.setSquareSize(DEFAULT_SQUARE_SIZE);
+                }
+            }
+        });
+
+        windowManager.addView(resetButton, resetParams);
+
+        // Create file browser button (to the right of reset button)
         fileBrowserButton = new FileBrowserButtonView(this);
 
         int fileBrowserLayoutType;
@@ -633,7 +669,7 @@ public class OverlayService extends Service {
 
         fileBrowserParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
         fileBrowserParams.y = 200; // Same row as other buttons
-        fileBrowserParams.x = -((280 + 40) / 2 + 280 + 40); // Left of next line = -160 - 280 - 40 = -480
+        fileBrowserParams.x = -310; // Gallery center in centered group
 
         fileBrowserButton.setOnClickListener(() -> {
             openScreenshotFolder();
@@ -662,7 +698,7 @@ public class OverlayService extends Service {
 
         nextZoomLevelParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
         nextZoomLevelParams.y = 200; // Same row as screenshot button
-        nextZoomLevelParams.x = ((280 + 40) / 2) + 280 + 40; // Right of camera = 160 + 280 + 40 = 480
+        nextZoomLevelParams.x = 540; // Zoom center in centered group
 
         nextZoomLevelButton.setOnClickListener(() -> {
             processNextZoomLevel();
@@ -724,13 +760,17 @@ public class OverlayService extends Service {
             windowManager.removeView(vCounterDisplay);
             vCounterDisplay = null;
         }
-        if (vResetButton != null && windowManager != null) {
-            windowManager.removeView(vResetButton);
-            vResetButton = null;
-        }
         if (vScrollIncrementInput != null && windowManager != null) {
             windowManager.removeView(vScrollIncrementInput);
             vScrollIncrementInput = null;
+        }
+        if (hTestButton != null && windowManager != null) {
+            windowManager.removeView(hTestButton);
+            hTestButton = null;
+        }
+        if (vTestButton != null && windowManager != null) {
+            windowManager.removeView(vTestButton);
+            vTestButton = null;
         }
     }
 
@@ -1157,8 +1197,9 @@ public class OverlayService extends Service {
         if (vMinusButton != null) vMinusButton.setVisibility(visibility);
         if (vPlusButton != null) vPlusButton.setVisibility(visibility);
         if (vCounterDisplay != null) vCounterDisplay.setVisibility(visibility);
-        if (vResetButton != null) vResetButton.setVisibility(visibility);
         if (vScrollIncrementInput != null) vScrollIncrementInput.setVisibility(visibility);
+        if (hTestButton != null) hTestButton.setVisibility(visibility);
+        if (vTestButton != null) vTestButton.setVisibility(visibility);
     }
 
     private void showScrollIncrementDialog(boolean isVertical) {
