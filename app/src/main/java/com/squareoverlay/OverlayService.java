@@ -26,9 +26,10 @@ public class OverlayService extends Service {
     private AdjustButtonView plusButton;
     private AdjustButtonView resetButton;
     private CounterDisplayView counterDisplay;
+    private ScrollIncrementInputView scrollIncrementInput;
     private ScreenshotService screenshotService;
     private int scrollDistance = 0; // Accumulated scroll distance in pixels
-    private static final int SCROLL_INCREMENT = 100; // Each +/- click scrolls 100 pixels
+    private int scrollIncrement = 30; // Dynamic scroll increment, default 30 pixels
     private static final int MAX_SCROLL_DISTANCE = 1100; // Maximum scroll distance to avoid off-screen gestures
 
     @Override
@@ -164,6 +165,9 @@ public class OverlayService extends Service {
                 if (counterDisplay != null) {
                     counterDisplay.setVisibility(android.view.View.INVISIBLE);
                 }
+                if (scrollIncrementInput != null) {
+                    scrollIncrementInput.setVisibility(android.view.View.INVISIBLE);
+                }
 
                 // Wait for UI to update, then capture
                 new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
@@ -190,6 +194,9 @@ public class OverlayService extends Service {
                             }
                             if (counterDisplay != null) {
                                 counterDisplay.setVisibility(android.view.View.VISIBLE);
+                            }
+                            if (scrollIncrementInput != null) {
+                                scrollIncrementInput.setVisibility(android.view.View.VISIBLE);
                             }
                         }, 150);
                     }, 150);
@@ -252,15 +259,15 @@ public class OverlayService extends Service {
 
         minusParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
         minusParams.y = 550; // Above screenshot button
-        minusParams.x = -30; // Second position (R, -, +, counter)
+        minusParams.x = 240; // Fourth position: Minus button (200px wide, center at 240)
 
         minusButton.setOnClickListener(() -> {
-            // Scroll left by SCROLL_INCREMENT
-            scrollDistance -= SCROLL_INCREMENT;
+            // Scroll left by scrollIncrement
+            scrollDistance -= scrollIncrement;
             if (counterDisplay != null) {
                 counterDisplay.setCounter(scrollDistance);
             }
-            performSmallScroll(-SCROLL_INCREMENT);
+            performSmallScroll(-scrollIncrement);
             android.util.Log.d("OverlayService", "Scrolled left, distance now: " + scrollDistance + "px");
         });
 
@@ -287,16 +294,16 @@ public class OverlayService extends Service {
 
         plusParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
         plusParams.y = 550; // Above screenshot button
-        plusParams.x = 210; // Third position (R, -, +, counter)
+        plusParams.x = 480; // Fifth position: Plus button (200px wide, center at 480)
 
         plusButton.setOnClickListener(() -> {
-            // Scroll right by SCROLL_INCREMENT
-            if (scrollDistance + SCROLL_INCREMENT <= MAX_SCROLL_DISTANCE) {
-                scrollDistance += SCROLL_INCREMENT;
+            // Scroll right by scrollIncrement
+            if (scrollDistance + scrollIncrement <= MAX_SCROLL_DISTANCE) {
+                scrollDistance += scrollIncrement;
                 if (counterDisplay != null) {
                     counterDisplay.setCounter(scrollDistance);
                 }
-                performSmallScroll(SCROLL_INCREMENT);
+                performSmallScroll(scrollIncrement);
                 android.util.Log.d("OverlayService", "Scrolled right, distance now: " + scrollDistance + "px");
             } else {
                 Toast.makeText(this, "Maximum scroll distance reached: " + MAX_SCROLL_DISTANCE + "px", Toast.LENGTH_SHORT).show();
@@ -327,7 +334,7 @@ public class OverlayService extends Service {
 
         resetParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
         resetParams.y = 550; // Above screenshot button - same row as others
-        resetParams.x = -250; // First position (R, -, +, counter)
+        resetParams.x = 0; // Third position: Reset button (200px wide, centered at 0)
 
         resetButton.setOnClickListener(() -> {
             scrollDistance = 0;
@@ -338,6 +345,44 @@ public class OverlayService extends Service {
         });
 
         windowManager.addView(resetButton, resetParams);
+
+        // Create scroll increment input (to the left of reset button)
+        scrollIncrementInput = new ScrollIncrementInputView(this);
+        scrollIncrementInput.setValue(scrollIncrement); // Set default value
+
+        int inputLayoutType;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            inputLayoutType = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
+        } else {
+            inputLayoutType = WindowManager.LayoutParams.TYPE_PHONE;
+        }
+
+        WindowManager.LayoutParams inputParams = new WindowManager.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                inputLayoutType,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+                PixelFormat.TRANSLUCENT
+        );
+
+        inputParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+        inputParams.y = 550; // Same row as other buttons
+        inputParams.x = -530; // First position: Edit button (100px wide, center at -530)
+
+        // Set up listener to update scrollIncrement when value changes
+        scrollIncrementInput.setOnValueChangedListener(newValue -> {
+            scrollIncrement = newValue;
+            android.util.Log.d("OverlayService", "Scroll increment changed to: " + scrollIncrement + "px");
+        });
+
+        // Handle click to open dialog for editing
+        scrollIncrementInput.setOnClickListener(() -> {
+            android.util.Log.d("OverlayService", "ScrollIncrementInput clicked!");
+            showScrollIncrementDialog();
+        });
+
+        windowManager.addView(scrollIncrementInput, inputParams);
 
         // Create counter display above the button row
         counterDisplay = new CounterDisplayView(this);
@@ -359,8 +404,8 @@ public class OverlayService extends Service {
         );
 
         counterParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
-        counterParams.y = 540; // Vertically centered with buttons (10px offset for alignment)
-        counterParams.x = 500; // Fourth position (R, -, +, counter)
+        counterParams.y = 550; // Same row as other buttons
+        counterParams.x = -290; // Second position: Counter display (300px wide, center at -290)
 
         windowManager.addView(counterDisplay, counterParams);
     }
@@ -389,6 +434,10 @@ public class OverlayService extends Service {
         if (counterDisplay != null && windowManager != null) {
             windowManager.removeView(counterDisplay);
             counterDisplay = null;
+        }
+        if (scrollIncrementInput != null && windowManager != null) {
+            windowManager.removeView(scrollIncrementInput);
+            scrollIncrementInput = null;
         }
     }
 
@@ -478,6 +527,42 @@ public class OverlayService extends Service {
         } catch (Exception e) {
             android.util.Log.e("OverlayService", "Failed to perform small scroll: " + e.getMessage(), e);
         }
+    }
+
+    private void showScrollIncrementDialog() {
+        android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert);
+        builder.setTitle("Set Scroll Increment (px)");
+
+        final android.widget.EditText input = new android.widget.EditText(this);
+        input.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        input.setText(String.valueOf(scrollIncrement));
+        input.setSelection(input.getText().length());
+        builder.setView(input);
+
+        builder.setPositiveButton("OK", (dialog, which) -> {
+            try {
+                int newValue = Integer.parseInt(input.getText().toString());
+                if (newValue > 0 && newValue <= 500) {
+                    scrollIncrement = newValue;
+                    if (scrollIncrementInput != null) {
+                        scrollIncrementInput.setValue(scrollIncrement);
+                    }
+                    android.util.Log.d("OverlayService", "Scroll increment updated to: " + scrollIncrement + "px");
+                }
+            } catch (NumberFormatException e) {
+                android.util.Log.e("OverlayService", "Invalid number entered");
+            }
+        });
+
+        builder.setNegativeButton("Cancel", (dialog, which) -> dialog.cancel());
+
+        android.app.AlertDialog dialog = builder.create();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            dialog.getWindow().setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY);
+        } else {
+            dialog.getWindow().setType(WindowManager.LayoutParams.TYPE_SYSTEM_ALERT);
+        }
+        dialog.show();
     }
 
     @Override

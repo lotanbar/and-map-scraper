@@ -5,31 +5,32 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.RectF;
-import android.text.InputType;
-import android.view.Gravity;
-import android.view.KeyEvent;
 import android.view.MotionEvent;
-import android.view.inputmethod.EditorInfo;
-import android.view.inputmethod.InputMethodManager;
-import android.widget.EditText;
-import android.widget.FrameLayout;
+import android.view.View;
 
-public class ScrollIncrementInputView extends FrameLayout {
+public class ScrollIncrementInputView extends View {
 
     private Paint backgroundPaint;
-    private Paint labelPaint;
+    private Paint textPaint;
+    private Paint iconPaint;
     private RectF backgroundRect;
-    private EditText editText;
     private int currentValue = 30;
+    private boolean isPressed = false;
 
-    private static final int WIDTH = 300;
-    private static final int HEIGHT = 120;
+    private static final int WIDTH = 100;
+    private static final int HEIGHT = 140; // Match other buttons
 
     public interface OnValueChangedListener {
         void onValueChanged(int newValue);
     }
 
     private OnValueChangedListener valueChangedListener;
+
+    public interface OnClickListener {
+        void onClick();
+    }
+
+    private OnClickListener onClickListener;
 
     public ScrollIncrementInputView(Context context) {
         super(context);
@@ -40,60 +41,20 @@ public class ScrollIncrementInputView extends FrameLayout {
         backgroundPaint.setStyle(Paint.Style.FILL);
         backgroundPaint.setAntiAlias(true);
 
-        labelPaint = new Paint();
-        labelPaint.setColor(Color.WHITE);
-        labelPaint.setTextSize(40);
-        labelPaint.setAntiAlias(true);
-        labelPaint.setTextAlign(Paint.Align.CENTER);
+        textPaint = new Paint();
+        textPaint.setColor(Color.WHITE);
+        textPaint.setTextSize(32);
+        textPaint.setAntiAlias(true);
+        textPaint.setTextAlign(Paint.Align.CENTER);
+        textPaint.setFakeBoldText(true);
+
+        iconPaint = new Paint();
+        iconPaint.setColor(Color.WHITE);
+        iconPaint.setTextSize(50);
+        iconPaint.setAntiAlias(true);
+        iconPaint.setTextAlign(Paint.Align.CENTER);
 
         backgroundRect = new RectF();
-
-        // Create EditText for numeric input
-        editText = new EditText(context);
-        editText.setInputType(InputType.TYPE_CLASS_NUMBER);
-        editText.setText(String.valueOf(currentValue));
-        editText.setTextSize(30);
-        editText.setTextColor(Color.WHITE);
-        editText.setBackgroundColor(Color.argb(100, 255, 255, 255));
-        editText.setGravity(Gravity.CENTER);
-        editText.setPadding(20, 10, 20, 10);
-        editText.setSingleLine(true);
-        editText.setImeOptions(EditorInfo.IME_ACTION_DONE);
-
-        // Handle "Done" button on keyboard
-        editText.setOnEditorActionListener((v, actionId, event) -> {
-            if (actionId == EditorInfo.IME_ACTION_DONE ||
-                (event != null && event.getKeyCode() == KeyEvent.KEYCODE_ENTER)) {
-                try {
-                    int newValue = Integer.parseInt(editText.getText().toString());
-                    if (newValue > 0 && newValue <= 500) {
-                        currentValue = newValue;
-                        if (valueChangedListener != null) {
-                            valueChangedListener.onValueChanged(currentValue);
-                        }
-                        hideKeyboard();
-                        return true;
-                    } else {
-                        // Reset to previous value if invalid
-                        editText.setText(String.valueOf(currentValue));
-                        hideKeyboard();
-                    }
-                } catch (NumberFormatException e) {
-                    // Reset to previous value if invalid
-                    editText.setText(String.valueOf(currentValue));
-                    hideKeyboard();
-                }
-            }
-            return false;
-        });
-
-        // Layout params for EditText - centered in the view
-        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
-            200,
-            80
-        );
-        params.gravity = Gravity.CENTER;
-        addView(editText, params);
     }
 
     public void setOnValueChangedListener(OnValueChangedListener listener) {
@@ -106,7 +67,7 @@ public class ScrollIncrementInputView extends FrameLayout {
 
     public void setValue(int value) {
         this.currentValue = value;
-        editText.setText(String.valueOf(value));
+        invalidate();
     }
 
     @Override
@@ -118,39 +79,55 @@ public class ScrollIncrementInputView extends FrameLayout {
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
 
-        // Draw background
+        // Draw background with pressed effect
+        if (isPressed) {
+            backgroundPaint.setColor(Color.argb(255, 70, 70, 70));
+        } else {
+            backgroundPaint.setColor(Color.argb(220, 50, 50, 50));
+        }
         backgroundRect.set(0, 0, getWidth(), getHeight());
-        canvas.drawRoundRect(backgroundRect, 20, 20, backgroundPaint);
+        canvas.drawRoundRect(backgroundRect, 15, 15, backgroundPaint);
 
-        // Draw label above the input
-        String label = "px/step";
-        float labelY = 35;
-        canvas.drawText(label, getWidth() / 2f, labelY, labelPaint);
+        // Draw edit icon (✏️ / pencil symbol)
+        String icon = "✏";
+        float iconY = getHeight() / 2f + 8;
+        canvas.drawText(icon, getWidth() / 2f, iconY, iconPaint);
+
+        // Draw value below icon
+        String valueText = currentValue + "px";
+        float textY = getHeight() - 15;
+        canvas.drawText(valueText, getWidth() / 2f, textY, textPaint);
     }
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
-        if (event.getAction() == MotionEvent.ACTION_DOWN) {
-            // Request focus and show keyboard
-            editText.requestFocus();
-            showKeyboard();
-            return true;
+        switch (event.getAction()) {
+            case MotionEvent.ACTION_DOWN:
+                isPressed = true;
+                invalidate();
+                return true;
+            case MotionEvent.ACTION_UP:
+                isPressed = false;
+                invalidate();
+                if (onClickListener != null) {
+                    onClickListener.onClick();
+                }
+                performClick();
+                return true;
+            case MotionEvent.ACTION_CANCEL:
+                isPressed = false;
+                invalidate();
+                return true;
         }
         return super.onTouchEvent(event);
     }
 
-    private void showKeyboard() {
-        InputMethodManager imm = (InputMethodManager) getContext().getSystemService(Context.INPUT_METHOD_SERVICE);
-        if (imm != null) {
-            imm.showSoftInput(editText, InputMethodManager.SHOW_IMPLICIT);
-        }
+    @Override
+    public boolean performClick() {
+        return super.performClick();
     }
 
-    private void hideKeyboard() {
-        editText.clearFocus();
-        InputMethodManager imm = (InputMethodManager) getContext().getSystemService(Context.INPUT_METHOD_SERVICE);
-        if (imm != null) {
-            imm.hideSoftInputFromWindow(editText.getWindowToken(), 0);
-        }
+    public void setOnClickListener(OnClickListener listener) {
+        this.onClickListener = listener;
     }
 }

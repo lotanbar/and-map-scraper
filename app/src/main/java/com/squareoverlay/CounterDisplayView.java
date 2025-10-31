@@ -15,7 +15,7 @@ public class CounterDisplayView extends View {
     private int counterValue = 0;
 
     private static final int WIDTH = 300;
-    private static final int HEIGHT = 120;
+    private static final int HEIGHT = 140; // Match other buttons
 
     public CounterDisplayView(Context context) {
         super(context);
