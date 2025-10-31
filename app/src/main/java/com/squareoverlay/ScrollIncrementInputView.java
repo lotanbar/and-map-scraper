@@ -18,13 +18,7 @@ public class ScrollIncrementInputView extends View {
     private boolean isPressed = false;
 
     private static final int WIDTH = 100;
-    private static final int HEIGHT = 140; // Match other buttons
-
-    public interface OnValueChangedListener {
-        void onValueChanged(int newValue);
-    }
-
-    private OnValueChangedListener valueChangedListener;
+    private static final int HEIGHT = 140;
 
     public interface OnClickListener {
         void onClick();
@@ -57,10 +51,6 @@ public class ScrollIncrementInputView extends View {
         backgroundRect = new RectF();
     }
 
-    public void setOnValueChangedListener(OnValueChangedListener listener) {
-        this.valueChangedListener = listener;
-    }
-
     public int getValue() {
         return currentValue;
     }
@@ -79,7 +69,6 @@ public class ScrollIncrementInputView extends View {
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
 
-        // Draw background with pressed effect
         if (isPressed) {
             backgroundPaint.setColor(Color.argb(255, 70, 70, 70));
         } else {
@@ -88,12 +77,10 @@ public class ScrollIncrementInputView extends View {
         backgroundRect.set(0, 0, getWidth(), getHeight());
         canvas.drawRoundRect(backgroundRect, 15, 15, backgroundPaint);
 
-        // Draw edit icon (✏️ / pencil symbol)
         String icon = "✏";
         float iconY = getHeight() / 2f + 8;
         canvas.drawText(icon, getWidth() / 2f, iconY, iconPaint);
 
-        // Draw value below icon
         String valueText = currentValue + "px";
         float textY = getHeight() - 15;
         canvas.drawText(valueText, getWidth() / 2f, textY, textPaint);

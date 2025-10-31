@@ -174,112 +174,20 @@ public class OverlayService extends Service {
 
         overlayView.setScreenshotCallback((xPercent, yPercent, widthPercent, heightPercent, onHidden) -> {
             if (screenshotService != null) {
-                // Hide overlay and buttons
-                overlayView.setVisibility(android.view.View.INVISIBLE);
-                if (screenshotButton != null) {
-                    screenshotButton.setVisibility(android.view.View.INVISIBLE);
-                }
-                if (minusButton != null) {
-                    minusButton.setVisibility(android.view.View.INVISIBLE);
-                }
-                if (plusButton != null) {
-                    plusButton.setVisibility(android.view.View.INVISIBLE);
-                }
-                if (resetButton != null) {
-                    resetButton.setVisibility(android.view.View.INVISIBLE);
-                }
-                if (counterDisplay != null) {
-                    counterDisplay.setVisibility(android.view.View.INVISIBLE);
-                }
-                if (scrollIncrementInput != null) {
-                    scrollIncrementInput.setVisibility(android.view.View.INVISIBLE);
-                }
-                if (nextLineButton != null) {
-                    nextLineButton.setVisibility(android.view.View.INVISIBLE);
-                }
-                if (fileBrowserButton != null) {
-                    fileBrowserButton.setVisibility(android.view.View.INVISIBLE);
-                }
-                if (nextZoomLevelButton != null) {
-                    nextZoomLevelButton.setVisibility(android.view.View.INVISIBLE);
-                }
-                if (vMinusButton != null) {
-                    vMinusButton.setVisibility(android.view.View.INVISIBLE);
-                }
-                if (vPlusButton != null) {
-                    vPlusButton.setVisibility(android.view.View.INVISIBLE);
-                }
-                if (vCounterDisplay != null) {
-                    vCounterDisplay.setVisibility(android.view.View.INVISIBLE);
-                }
-                if (vResetButton != null) {
-                    vResetButton.setVisibility(android.view.View.INVISIBLE);
-                }
-                if (vScrollIncrementInput != null) {
-                    vScrollIncrementInput.setVisibility(android.view.View.INVISIBLE);
-                }
+                setAllViewsVisible(false);
 
-                // Wait for UI to update, then capture
                 new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
                     screenshotService.captureScreenshot(xPercent, yPercent, widthPercent, heightPercent, screenshotNumber, nextScreenshotIsLineStart);
 
-                    // Reset line start flag after use
                     nextScreenshotIsLineStart = false;
-
-                    // Increment screenshot counter and screenshot number
                     screenshotCount++;
                     screenshotNumber++;
-                    android.util.Log.d("OverlayService", "Screenshot taken, count: " + screenshotCount + ", next number: " + screenshotNumber);
 
-                    // Scroll horizontally by the width of the square after screenshot
                     new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
                         scrollHorizontallyBySquareWidth();
 
-                        // Show overlay and buttons again after scrolling
                         new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
-                            overlayView.setVisibility(android.view.View.VISIBLE);
-                            if (screenshotButton != null) {
-                                screenshotButton.setVisibility(android.view.View.VISIBLE);
-                            }
-                            if (minusButton != null) {
-                                minusButton.setVisibility(android.view.View.VISIBLE);
-                            }
-                            if (plusButton != null) {
-                                plusButton.setVisibility(android.view.View.VISIBLE);
-                            }
-                            if (resetButton != null) {
-                                resetButton.setVisibility(android.view.View.VISIBLE);
-                            }
-                            if (counterDisplay != null) {
-                                counterDisplay.setVisibility(android.view.View.VISIBLE);
-                            }
-                            if (scrollIncrementInput != null) {
-                                scrollIncrementInput.setVisibility(android.view.View.VISIBLE);
-                            }
-                            if (nextLineButton != null) {
-                                nextLineButton.setVisibility(android.view.View.VISIBLE);
-                            }
-                            if (fileBrowserButton != null) {
-                                fileBrowserButton.setVisibility(android.view.View.VISIBLE);
-                            }
-                            if (nextZoomLevelButton != null) {
-                                nextZoomLevelButton.setVisibility(android.view.View.VISIBLE);
-                            }
-                            if (vMinusButton != null) {
-                                vMinusButton.setVisibility(android.view.View.VISIBLE);
-                            }
-                            if (vPlusButton != null) {
-                                vPlusButton.setVisibility(android.view.View.VISIBLE);
-                            }
-                            if (vCounterDisplay != null) {
-                                vCounterDisplay.setVisibility(android.view.View.VISIBLE);
-                            }
-                            if (vResetButton != null) {
-                                vResetButton.setVisibility(android.view.View.VISIBLE);
-                            }
-                            if (vScrollIncrementInput != null) {
-                                vScrollIncrementInput.setVisibility(android.view.View.VISIBLE);
-                            }
+                            setAllViewsVisible(true);
                         }, 150);
                     }, 150);
                 }, 50);
@@ -351,7 +259,6 @@ public class OverlayService extends Service {
                 counterDisplay.setCounter(scrollDistance);
             }
             performSmallScroll(-scrollIncrement);
-            android.util.Log.d("OverlayService", "Scrolled left, distance now: " + scrollDistance + "px");
         });
 
         windowManager.addView(minusButton, minusParams);
@@ -387,10 +294,8 @@ public class OverlayService extends Service {
                     counterDisplay.setCounter(scrollDistance);
                 }
                 performSmallScroll(scrollIncrement);
-                android.util.Log.d("OverlayService", "Scrolled right, distance now: " + scrollDistance + "px");
             } else {
                 Toast.makeText(this, "Maximum scroll distance reached: " + MAX_SCROLL_DISTANCE + "px", Toast.LENGTH_SHORT).show();
-                android.util.Log.d("OverlayService", "Cannot scroll further, max reached: " + MAX_SCROLL_DISTANCE + "px");
             }
         });
 
@@ -426,7 +331,6 @@ public class OverlayService extends Service {
                 vCounterDisplay.setCounter(verticalScrollDistance);
             }
             performSmallVerticalScroll(-verticalScrollIncrement); // Negative = scroll UP
-            android.util.Log.d("OverlayService", "Vertical scroll decreased, distance now: " + verticalScrollDistance + "px");
         });
 
         windowManager.addView(vMinusButton, vMinusParams);
@@ -462,10 +366,8 @@ public class OverlayService extends Service {
                     vCounterDisplay.setCounter(verticalScrollDistance);
                 }
                 performSmallVerticalScroll(verticalScrollIncrement); // Positive = scroll DOWN
-                android.util.Log.d("OverlayService", "Vertical scroll increased, distance now: " + verticalScrollDistance + "px");
             } else {
                 Toast.makeText(this, "Maximum vertical scroll distance reached: " + MAX_SCROLL_DISTANCE + "px", Toast.LENGTH_SHORT).show();
-                android.util.Log.d("OverlayService", "Cannot increase vertical scroll further, max reached: " + MAX_SCROLL_DISTANCE + "px");
             }
         });
 
@@ -500,7 +402,6 @@ public class OverlayService extends Service {
             if (vCounterDisplay != null) {
                 vCounterDisplay.setCounter(verticalScrollDistance);
             }
-            android.util.Log.d("OverlayService", "Vertical scroll reset to default: " + DEFAULT_VERTICAL_SCROLL_DISTANCE + "px");
         });
 
         windowManager.addView(vResetButton, vResetParams);
@@ -530,15 +431,10 @@ public class OverlayService extends Service {
         vInputParams.x = -530; // Same horizontal position as scroll increment input
 
         // Set up listener to update verticalScrollIncrement when value changes
-        vScrollIncrementInput.setOnValueChangedListener(newValue -> {
-            verticalScrollIncrement = newValue;
-            android.util.Log.d("OverlayService", "Vertical scroll increment changed to: " + verticalScrollIncrement + "px");
-        });
 
         // Handle click to open dialog for editing
         vScrollIncrementInput.setOnClickListener(() -> {
-            android.util.Log.d("OverlayService", "VScrollIncrementInput clicked!");
-            showVerticalScrollIncrementDialog();
+            showScrollIncrementDialog(true);
         });
 
         windowManager.addView(vScrollIncrementInput, vInputParams);
@@ -594,10 +490,6 @@ public class OverlayService extends Service {
 
                     // Reset the overlay view's internal size
                     overlayView.setSquareSize(DEFAULT_SQUARE_SIZE);
-
-                    android.util.Log.d("OverlayService", "Reset to defaults: size=" + DEFAULT_SQUARE_SIZE +
-                                       ", pos=(" + DEFAULT_SQUARE_X + "," + DEFAULT_SQUARE_Y +
-                                       "), scrollDistance=" + DEFAULT_SCROLL_DISTANCE);
                 }
             }
         });
@@ -629,15 +521,10 @@ public class OverlayService extends Service {
         inputParams.x = -530; // First position: Edit button (100px wide, center at -530)
 
         // Set up listener to update scrollIncrement when value changes
-        scrollIncrementInput.setOnValueChangedListener(newValue -> {
-            scrollIncrement = newValue;
-            android.util.Log.d("OverlayService", "Scroll increment changed to: " + scrollIncrement + "px");
-        });
 
         // Handle click to open dialog for editing
         scrollIncrementInput.setOnClickListener(() -> {
-            android.util.Log.d("OverlayService", "ScrollIncrementInput clicked!");
-            showScrollIncrementDialog();
+            showScrollIncrementDialog(false);
         });
 
         windowManager.addView(scrollIncrementInput, inputParams);
@@ -848,16 +735,13 @@ public class OverlayService extends Service {
     }
 
     private void scrollHorizontallyBySquareWidth() {
-        android.util.Log.d("OverlayService", "scrollHorizontallyBySquareWidth called");
 
         if (overlayView == null || windowManager == null) {
-            android.util.Log.e("OverlayService", "Cannot scroll: overlayView or windowManager is null");
             return;
         }
 
         ScrollAccessibilityService accessibilityService = ScrollAccessibilityService.getInstance();
         if (accessibilityService == null) {
-            android.util.Log.e("OverlayService", "Accessibility service not enabled. Please enable it in Settings > Accessibility");
             Toast.makeText(this, "Please enable Square Overlay accessibility service in Settings", Toast.LENGTH_LONG).show();
             return;
         }
@@ -886,24 +770,15 @@ public class OverlayService extends Service {
             // Use slower duration for more precise scrolling
             int duration = 500;
 
-            android.util.Log.d("OverlayService", "========== HORIZONTAL SCROLL ==========");
-            android.util.Log.d("OverlayService", "Scroll distance variable: " + scrollDistance + "px");
-            android.util.Log.d("OverlayService", "Swipe distance used: " + swipeDistance + "px");
-            android.util.Log.d("OverlayService", "Square actual position: (" + squareX + "," + squareY + ") size=" + squareSize);
-            android.util.Log.d("OverlayService", "Swipe from (" + startX + "," + gestureY + ") to (" + endX + "," + gestureY + ")");
-            android.util.Log.d("OverlayService", "Total swipe distance: " + (startX - endX) + "px");
-            android.util.Log.d("OverlayService", "======================================");
 
             accessibilityService.performHorizontalScroll(startX, gestureY, endX, gestureY, duration);
         } catch (Exception e) {
-            android.util.Log.e("OverlayService", "Failed to scroll: " + e.getMessage(), e);
         }
     }
 
     private void performSmallScroll(int distance) {
         ScrollAccessibilityService accessibilityService = ScrollAccessibilityService.getInstance();
         if (accessibilityService == null) {
-            android.util.Log.e("OverlayService", "Accessibility service not enabled");
             return;
         }
 
@@ -932,17 +807,14 @@ public class OverlayService extends Service {
             // Slower gesture for better scroll recognition (300ms is typical for scroll gestures)
             int duration = 300;
 
-            android.util.Log.d("OverlayService", "Small scroll OUTSIDE square: (" + startX + "," + gestureY + ") to (" + endX + "," + gestureY + ")");
             accessibilityService.performHorizontalScroll(startX, gestureY, endX, gestureY, duration);
         } catch (Exception e) {
-            android.util.Log.e("OverlayService", "Failed to perform small scroll: " + e.getMessage(), e);
         }
     }
 
     private void performSmallVerticalScroll(int distance) {
         ScrollAccessibilityService accessibilityService = ScrollAccessibilityService.getInstance();
         if (accessibilityService == null) {
-            android.util.Log.e("OverlayService", "Accessibility service not enabled");
             return;
         }
 
@@ -968,87 +840,12 @@ public class OverlayService extends Service {
             // Slower gesture for better scroll recognition
             int duration = 300;
 
-            android.util.Log.d("OverlayService", "Small vertical scroll: (" + centerX + "," + startY + ") to (" + centerX + "," + endY + ") distance=" + distance + "px");
             accessibilityService.performVerticalScroll(centerX, startY, centerX, endY, duration);
         } catch (Exception e) {
-            android.util.Log.e("OverlayService", "Failed to perform small vertical scroll: " + e.getMessage(), e);
         }
-    }
-
-    private void showScrollIncrementDialog() {
-        android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert);
-        builder.setTitle("Set Scroll Increment (px)");
-
-        final android.widget.EditText input = new android.widget.EditText(this);
-        input.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
-        input.setText(String.valueOf(scrollIncrement));
-        input.setSelection(input.getText().length());
-        builder.setView(input);
-
-        builder.setPositiveButton("OK", (dialog, which) -> {
-            try {
-                int newValue = Integer.parseInt(input.getText().toString());
-                if (newValue > 0 && newValue <= 500) {
-                    scrollIncrement = newValue;
-                    if (scrollIncrementInput != null) {
-                        scrollIncrementInput.setValue(scrollIncrement);
-                    }
-                    android.util.Log.d("OverlayService", "Scroll increment updated to: " + scrollIncrement + "px");
-                }
-            } catch (NumberFormatException e) {
-                android.util.Log.e("OverlayService", "Invalid number entered");
-            }
-        });
-
-        builder.setNegativeButton("Cancel", (dialog, which) -> dialog.cancel());
-
-        android.app.AlertDialog dialog = builder.create();
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            dialog.getWindow().setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY);
-        } else {
-            dialog.getWindow().setType(WindowManager.LayoutParams.TYPE_SYSTEM_ALERT);
-        }
-        dialog.show();
-    }
-
-    private void showVerticalScrollIncrementDialog() {
-        android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert);
-        builder.setTitle("Set Vertical Scroll Increment (px)");
-
-        final android.widget.EditText input = new android.widget.EditText(this);
-        input.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
-        input.setText(String.valueOf(verticalScrollIncrement));
-        input.setSelection(input.getText().length());
-        builder.setView(input);
-
-        builder.setPositiveButton("OK", (dialog, which) -> {
-            try {
-                int newValue = Integer.parseInt(input.getText().toString());
-                if (newValue > 0 && newValue <= 500) {
-                    verticalScrollIncrement = newValue;
-                    if (vScrollIncrementInput != null) {
-                        vScrollIncrementInput.setValue(verticalScrollIncrement);
-                    }
-                    android.util.Log.d("OverlayService", "Vertical scroll increment updated to: " + verticalScrollIncrement + "px");
-                }
-            } catch (NumberFormatException e) {
-                android.util.Log.e("OverlayService", "Invalid number entered");
-            }
-        });
-
-        builder.setNegativeButton("Cancel", (dialog, which) -> dialog.cancel());
-
-        android.app.AlertDialog dialog = builder.create();
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            dialog.getWindow().setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY);
-        } else {
-            dialog.getWindow().setType(WindowManager.LayoutParams.TYPE_SYSTEM_ALERT);
-        }
-        dialog.show();
     }
 
     private void openScreenshotFolder() {
-        android.util.Log.d("OverlayService", "openScreenshotFolder called");
 
         try {
             File picturesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES);
@@ -1066,11 +863,8 @@ public class OverlayService extends Service {
                                   "vnd.android.document/directory");
             intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
 
-            android.util.Log.d("OverlayService", "Opening DocumentsUI at SquareOverlay folder");
             startActivity(intent);
-            android.util.Log.d("OverlayService", "Opened file browser");
         } catch (Exception e) {
-            android.util.Log.e("OverlayService", "Failed with DocumentsUI, trying OnePlus: " + e.getMessage());
 
             // Fallback: Launch OnePlus File Manager (what was working before)
             try {
@@ -1078,16 +872,13 @@ public class OverlayService extends Service {
                 intent.setClassName("com.oneplus.filemanager", "com.oplus.filemanager.main.ui.MainActivity");
                 intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
                 startActivity(intent);
-                android.util.Log.d("OverlayService", "Opened OnePlus File Manager");
             } catch (Exception ex) {
-                android.util.Log.e("OverlayService", "All file browser attempts failed: " + ex.getMessage(), ex);
                 Toast.makeText(this, "Could not open file manager", Toast.LENGTH_SHORT).show();
             }
         }
     }
 
     private void goDownOneLine() {
-        android.util.Log.d("OverlayService", "goDownOneLine called, screenshotCount=" + screenshotCount);
 
         if (screenshotCount == 0) {
             Toast.makeText(this, "No screenshots taken yet", Toast.LENGTH_SHORT).show();
@@ -1096,7 +887,6 @@ public class OverlayService extends Service {
 
         ScrollAccessibilityService accessibilityService = ScrollAccessibilityService.getInstance();
         if (accessibilityService == null) {
-            android.util.Log.e("OverlayService", "Accessibility service not enabled");
             Toast.makeText(this, "Please enable Square Overlay accessibility service in Settings", Toast.LENGTH_LONG).show();
             return;
         }
@@ -1121,14 +911,6 @@ public class OverlayService extends Service {
             int startY = centerY + (verticalDistance / 2);
             int endY = centerY - (verticalDistance / 2);
 
-            android.util.Log.d("OverlayService", "========== VERTICAL SCROLL ==========");
-            android.util.Log.d("OverlayService", "Horizontal scroll distance: " + scrollDistance + "px");
-            android.util.Log.d("OverlayService", "Vertical scroll distance: " + verticalScrollDistance + "px");
-            android.util.Log.d("OverlayService", "Vertical distance used: " + verticalDistance + "px");
-            android.util.Log.d("OverlayService", "Screen center: (" + centerX + "," + centerY + ")");
-            android.util.Log.d("OverlayService", "Vertical swipe from (" + centerX + "," + startY + ") to (" + centerX + "," + endY + ")");
-            android.util.Log.d("OverlayService", "Total swipe distance: " + (startY - endY) + "px");
-            android.util.Log.d("OverlayService", "======================================");
 
             accessibilityService.performVerticalScroll(centerX, startY, centerX, endY, 500);
 
@@ -1139,20 +921,17 @@ public class OverlayService extends Service {
             }, SCROLL_DELAY_MS);
 
         } catch (Exception e) {
-            android.util.Log.e("OverlayService", "Failed to go down one line: " + e.getMessage(), e);
         }
     }
 
     private void scrollLeftSequentially(int currentScroll, int totalScrolls) {
         if (currentScroll >= totalScrolls) {
             // Done with all scrolls, reset screenshot counter
-            android.util.Log.d("OverlayService", "All left scrolls completed, resetting screenshot counter");
             screenshotCount = 0;
             Toast.makeText(this, "Moved to next line", Toast.LENGTH_SHORT).show();
             return;
         }
 
-        android.util.Log.d("OverlayService", "Left scroll " + (currentScroll + 1) + " of " + totalScrolls);
 
         ScrollAccessibilityService accessibilityService = ScrollAccessibilityService.getInstance();
         if (accessibilityService == null || windowManager == null) {
@@ -1173,7 +952,6 @@ public class OverlayService extends Service {
             int startX = centerX - (scrollDistance / 2);
             int endX = centerX + (scrollDistance / 2);
 
-            android.util.Log.d("OverlayService", "Left scroll from (" + startX + "," + centerY + ") to (" + endX + "," + centerY + ")");
             accessibilityService.performHorizontalScroll(startX, centerY, endX, centerY, 500);
 
             // Wait for scroll to complete with momentum, then do next scroll
@@ -1182,12 +960,10 @@ public class OverlayService extends Service {
             }, SCROLL_DELAY_MS);
 
         } catch (Exception e) {
-            android.util.Log.e("OverlayService", "Failed to scroll left: " + e.getMessage(), e);
         }
     }
 
     private void processNextZoomLevel() {
-        android.util.Log.d("OverlayService", "processNextZoomLevel called");
 
         try {
             File picturesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES);
@@ -1212,7 +988,6 @@ public class OverlayService extends Service {
                 nextZoomLevel++;
             }
 
-            android.util.Log.d("OverlayService", "Next zoom level: " + nextZoomLevel);
 
             // Create the zoom folder
             File zoomFolder = new File(appDir, "zoom" + nextZoomLevel);
@@ -1225,14 +1000,12 @@ public class OverlayService extends Service {
             for (File file : pngFiles) {
                 File dest = new File(zoomFolder, file.getName());
                 if (!file.renameTo(dest)) {
-                    android.util.Log.e("OverlayService", "Failed to move file: " + file.getName());
                 }
             }
 
             // Reset counters after successfully moving files
             screenshotCount = 0;
             screenshotNumber = 1;
-            android.util.Log.d("OverlayService", "Reset screenshot counters: count=0, number=1");
 
             // Now stitch the images using ImageMagick
             stitchImages(zoomFolder, new File(appDir, "zoom" + nextZoomLevel + ".png"));
@@ -1240,7 +1013,6 @@ public class OverlayService extends Service {
             Toast.makeText(this, "Zoom level " + nextZoomLevel + " created", Toast.LENGTH_SHORT).show();
 
         } catch (Exception e) {
-            android.util.Log.e("OverlayService", "Failed to process zoom level: " + e.getMessage(), e);
             Toast.makeText(this, "Failed to create zoom level", Toast.LENGTH_SHORT).show();
         }
     }
@@ -1248,13 +1020,11 @@ public class OverlayService extends Service {
     private void stitchImages(File sourceFolder, File outputFile) {
         new Thread(() -> {
             try {
-                android.util.Log.d("OverlayService", "Starting Java-based image stitching");
 
                 // Get all image files and sort them
                 File[] imageFiles = sourceFolder.listFiles((dir, name) -> name.toLowerCase().endsWith(".png"));
 
                 if (imageFiles == null || imageFiles.length == 0) {
-                    android.util.Log.e("OverlayService", "No images found in zoom folder");
                     return;
                 }
 
@@ -1288,14 +1058,12 @@ public class OverlayService extends Service {
                     rows.add(currentRow);
                 }
 
-                android.util.Log.d("OverlayService", "Stitching " + imageFiles.length + " images into " + rows.size() + " rows");
 
                 // Create row bitmaps
                 java.util.List<android.graphics.Bitmap> rowBitmaps = new java.util.ArrayList<>();
 
                 for (int i = 0; i < rows.size(); i++) {
                     java.util.List<File> row = rows.get(i);
-                    android.util.Log.d("OverlayService", "Stitching row " + (i + 1) + " with " + row.size() + " images");
 
                     // Load all bitmaps for this row
                     java.util.List<android.graphics.Bitmap> bitmapsInRow = new java.util.ArrayList<>();
@@ -1309,7 +1077,6 @@ public class OverlayService extends Service {
                             totalWidth += bitmap.getWidth();
                             maxHeight = Math.max(maxHeight, bitmap.getHeight());
                         } else {
-                            android.util.Log.e("OverlayService", "Failed to load bitmap: " + file.getName());
                         }
                     }
 
@@ -1327,7 +1094,6 @@ public class OverlayService extends Service {
                         }
 
                         rowBitmaps.add(rowBitmap);
-                        android.util.Log.d("OverlayService", "Row " + (i + 1) + " stitched: " + totalWidth + "x" + maxHeight);
                     }
                 }
 
@@ -1341,7 +1107,6 @@ public class OverlayService extends Service {
                         totalHeight += rowBitmap.getHeight();
                     }
 
-                    android.util.Log.d("OverlayService", "Creating final bitmap: " + maxWidth + "x" + totalHeight);
 
                     android.graphics.Bitmap finalBitmap = android.graphics.Bitmap.createBitmap(
                         maxWidth, totalHeight, android.graphics.Bitmap.Config.ARGB_8888);
@@ -1361,7 +1126,6 @@ public class OverlayService extends Service {
                     fos.close();
                     finalBitmap.recycle();
 
-                    android.util.Log.d("OverlayService", "Stitching complete: " + outputFile.getAbsolutePath());
 
                     // Show success message on UI thread
                     new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
@@ -1370,12 +1134,72 @@ public class OverlayService extends Service {
                 }
 
             } catch (Exception e) {
-                android.util.Log.e("OverlayService", "Failed to stitch images: " + e.getMessage(), e);
                 new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
                     Toast.makeText(OverlayService.this, "Stitching failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
                 });
             }
         }).start();
+    }
+
+    private void setAllViewsVisible(boolean visible) {
+        int visibility = visible ? android.view.View.VISIBLE : android.view.View.INVISIBLE;
+
+        if (overlayView != null) overlayView.setVisibility(visibility);
+        if (screenshotButton != null) screenshotButton.setVisibility(visibility);
+        if (minusButton != null) minusButton.setVisibility(visibility);
+        if (plusButton != null) plusButton.setVisibility(visibility);
+        if (resetButton != null) resetButton.setVisibility(visibility);
+        if (counterDisplay != null) counterDisplay.setVisibility(visibility);
+        if (scrollIncrementInput != null) scrollIncrementInput.setVisibility(visibility);
+        if (nextLineButton != null) nextLineButton.setVisibility(visibility);
+        if (fileBrowserButton != null) fileBrowserButton.setVisibility(visibility);
+        if (nextZoomLevelButton != null) nextZoomLevelButton.setVisibility(visibility);
+        if (vMinusButton != null) vMinusButton.setVisibility(visibility);
+        if (vPlusButton != null) vPlusButton.setVisibility(visibility);
+        if (vCounterDisplay != null) vCounterDisplay.setVisibility(visibility);
+        if (vResetButton != null) vResetButton.setVisibility(visibility);
+        if (vScrollIncrementInput != null) vScrollIncrementInput.setVisibility(visibility);
+    }
+
+    private void showScrollIncrementDialog(boolean isVertical) {
+        android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert);
+        builder.setTitle("Set " + (isVertical ? "Vertical " : "") + "Scroll Increment (px)");
+
+        final android.widget.EditText input = new android.widget.EditText(this);
+        input.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        input.setText(String.valueOf(isVertical ? verticalScrollIncrement : scrollIncrement));
+        input.setSelection(input.getText().length());
+        builder.setView(input);
+
+        builder.setPositiveButton("OK", (dialog, which) -> {
+            try {
+                int newValue = Integer.parseInt(input.getText().toString());
+                if (newValue > 0 && newValue <= 500) {
+                    if (isVertical) {
+                        verticalScrollIncrement = newValue;
+                        if (vScrollIncrementInput != null) {
+                            vScrollIncrementInput.setValue(verticalScrollIncrement);
+                        }
+                    } else {
+                        scrollIncrement = newValue;
+                        if (scrollIncrementInput != null) {
+                            scrollIncrementInput.setValue(scrollIncrement);
+                        }
+                    }
+                }
+            } catch (NumberFormatException e) {
+            }
+        });
+
+        builder.setNegativeButton("Cancel", (dialog, which) -> dialog.cancel());
+
+        android.app.AlertDialog dialog = builder.create();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            dialog.getWindow().setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY);
+        } else {
+            dialog.getWindow().setType(WindowManager.LayoutParams.TYPE_SYSTEM_ALERT);
+        }
+        dialog.show();
     }
 
     @Override

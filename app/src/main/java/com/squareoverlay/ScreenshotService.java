@@ -1,6 +1,5 @@
 package com.squareoverlay;
 
-import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
@@ -15,19 +14,13 @@ import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.DisplayMetrics;
-import android.util.Log;
 import android.widget.Toast;
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.nio.ByteBuffer;
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.Locale;
 
 public class ScreenshotService {
-
-    private static final String TAG = "ScreenshotService";
 
     private Context context;
     private MediaProjectionManager projectionManager;
@@ -56,21 +49,17 @@ public class ScreenshotService {
     }
 
     public void startProjection(int resultCode, Intent data) {
-        // Clean up any existing projection first
         release();
 
         mediaProjection = projectionManager.getMediaProjection(resultCode, data);
 
-        // Register callback required by Android 14+
         mediaProjection.registerCallback(new MediaProjection.Callback() {
             @Override
             public void onStop() {
-                Log.d(TAG, "MediaProjection stopped");
                 cleanup();
             }
         }, null);
 
-        // Create VirtualDisplay ONCE and keep it alive for multiple captures
         imageReader = ImageReader.newInstance(screenWidth, screenHeight, PixelFormat.RGBA_8888, 2);
 
         virtualDisplay = mediaProjection.createVirtualDisplay(
@@ -83,8 +72,6 @@ public class ScreenshotService {
                 null,
                 null
         );
-
-        Log.d(TAG, "MediaProjection and VirtualDisplay started");
     }
 
     public void captureScreenshot(float xPercent, float yPercent, float widthPercent, float heightPercent, int screenshotNumber, boolean isLineStart) {
@@ -100,7 +87,6 @@ public class ScreenshotService {
 
         isCapturing = true;
 
-        // Use existing VirtualDisplay - don't create a new one
         new Handler(Looper.getMainLooper()).postDelayed(() -> {
             Image image = null;
             Bitmap bitmap = null;
@@ -122,13 +108,11 @@ public class ScreenshotService {
                     );
                     bitmap.copyPixelsFromBuffer(buffer);
 
-                    // Crop to square coordinates
                     int cropX = (int) ((xPercent / 100) * screenWidth);
                     int cropY = (int) ((yPercent / 100) * screenHeight);
                     int cropWidth = (int) ((widthPercent / 100) * screenWidth);
                     int cropHeight = (int) ((heightPercent / 100) * screenHeight);
 
-                    // Ensure crop is within bounds
                     cropX = Math.max(0, Math.min(cropX, screenWidth - 1));
                     cropY = Math.max(0, Math.min(cropY, screenHeight - 1));
                     cropWidth = Math.min(cropWidth, screenWidth - cropX);
@@ -143,7 +127,6 @@ public class ScreenshotService {
                     Toast.makeText(context, "Screenshot saved to Pictures/SquareOverlay", Toast.LENGTH_SHORT).show();
                 }
             } catch (Exception e) {
-                Log.e(TAG, "Failed to capture screenshot", e);
                 Toast.makeText(context, "Screenshot failed: " + e.getMessage(), Toast.LENGTH_SHORT).show();
             } finally {
                 if (bitmap != null) {
@@ -152,7 +135,6 @@ public class ScreenshotService {
                 if (image != null) {
                     image.close();
                 }
-                // Don't cleanup - keep VirtualDisplay alive for next capture
                 isCapturing = false;
             }
         }, 100);
@@ -174,10 +156,7 @@ public class ScreenshotService {
             bitmap.compress(Bitmap.CompressFormat.PNG, 100, fos);
             fos.flush();
             fos.close();
-
-            Log.d(TAG, "Screenshot saved: " + file.getAbsolutePath());
         } catch (Exception e) {
-            Log.e(TAG, "Failed to save screenshot", e);
         }
     }
 

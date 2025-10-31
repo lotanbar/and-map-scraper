@@ -15,7 +15,7 @@ public class CounterDisplayView extends View {
     private int counterValue = 0;
 
     private static final int WIDTH = 300;
-    private static final int HEIGHT = 140; // Match other buttons
+    private static final int HEIGHT = 140;
 
     public CounterDisplayView(Context context) {
         super(context);
@@ -36,10 +36,8 @@ public class CounterDisplayView extends View {
     }
 
     public void setCounter(int value) {
-        android.util.Log.d("CounterDisplayView", "setCounter called with value: " + value + " (old: " + this.counterValue + ")");
         this.counterValue = value;
         invalidate();
-        android.util.Log.d("CounterDisplayView", "invalidate() called, requesting redraw");
     }
 
     @Override
@@ -51,20 +49,14 @@ public class CounterDisplayView extends View {
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
 
-        android.util.Log.d("CounterDisplayView", "onDraw called, counterValue=" + counterValue);
-
         float centerX = getWidth() / 2f;
         float centerY = getHeight() / 2f;
 
-        // Draw background
         backgroundRect.set(0, 0, getWidth(), getHeight());
         canvas.drawRoundRect(backgroundRect, 20, 20, backgroundPaint);
 
-        // Draw counter text
         String text = counterValue + "px";
         float textY = centerY + (textPaint.getTextSize() / 2) - 5;
         canvas.drawText(text, centerX, textY, textPaint);
-
-        android.util.Log.d("CounterDisplayView", "onDraw completed, drew text: " + text);
     }
 }
