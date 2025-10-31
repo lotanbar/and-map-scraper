@@ -28,8 +28,13 @@ public class OverlayService extends Service {
     private AdjustButtonView minusButton;
     private AdjustButtonView plusButton;
     private AdjustButtonView resetButton;
+    private AdjustButtonView vMinusButton;
+    private AdjustButtonView vPlusButton;
+    private AdjustButtonView vResetButton;
     private CounterDisplayView counterDisplay;
+    private CounterDisplayView vCounterDisplay;
     private ScrollIncrementInputView scrollIncrementInput;
+    private ScrollIncrementInputView vScrollIncrementInput;
     private NextLineButtonView nextLineButton;
     private FileBrowserButtonView fileBrowserButton;
     private NextZoomLevelButtonView nextZoomLevelButton;
@@ -37,12 +42,15 @@ public class OverlayService extends Service {
 
     // Default values
     private static final int DEFAULT_SCROLL_DISTANCE = 773;
+    private static final int DEFAULT_VERTICAL_SCROLL_DISTANCE = 773;
     private static final float DEFAULT_SQUARE_SIZE = 695f;
     private static final int DEFAULT_SQUARE_X = 338;
     private static final int DEFAULT_SQUARE_Y = 117;
 
-    private int scrollDistance = DEFAULT_SCROLL_DISTANCE; // Accumulated scroll distance in pixels
-    private int scrollIncrement = 30; // Dynamic scroll increment, default 30 pixels
+    private int scrollDistance = DEFAULT_SCROLL_DISTANCE; // Horizontal scroll distance in pixels
+    private int verticalScrollDistance = DEFAULT_VERTICAL_SCROLL_DISTANCE; // Vertical scroll distance in pixels
+    private int scrollIncrement = 30; // Horizontal scroll increment, default 30 pixels
+    private int verticalScrollIncrement = 30; // Vertical scroll increment, default 30 pixels
     private int screenshotCount = 0; // Track number of screenshots taken (number of horizontal scrolls)
     private int screenshotNumber = 1; // Sequential number for screenshot filenames (1, 2, 3...)
     private boolean nextScreenshotIsLineStart = false; // Flag to mark next screenshot with 'z' suffix
@@ -195,6 +203,21 @@ public class OverlayService extends Service {
                 if (nextZoomLevelButton != null) {
                     nextZoomLevelButton.setVisibility(android.view.View.INVISIBLE);
                 }
+                if (vMinusButton != null) {
+                    vMinusButton.setVisibility(android.view.View.INVISIBLE);
+                }
+                if (vPlusButton != null) {
+                    vPlusButton.setVisibility(android.view.View.INVISIBLE);
+                }
+                if (vCounterDisplay != null) {
+                    vCounterDisplay.setVisibility(android.view.View.INVISIBLE);
+                }
+                if (vResetButton != null) {
+                    vResetButton.setVisibility(android.view.View.INVISIBLE);
+                }
+                if (vScrollIncrementInput != null) {
+                    vScrollIncrementInput.setVisibility(android.view.View.INVISIBLE);
+                }
 
                 // Wait for UI to update, then capture
                 new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
@@ -242,6 +265,21 @@ public class OverlayService extends Service {
                             if (nextZoomLevelButton != null) {
                                 nextZoomLevelButton.setVisibility(android.view.View.VISIBLE);
                             }
+                            if (vMinusButton != null) {
+                                vMinusButton.setVisibility(android.view.View.VISIBLE);
+                            }
+                            if (vPlusButton != null) {
+                                vPlusButton.setVisibility(android.view.View.VISIBLE);
+                            }
+                            if (vCounterDisplay != null) {
+                                vCounterDisplay.setVisibility(android.view.View.VISIBLE);
+                            }
+                            if (vResetButton != null) {
+                                vResetButton.setVisibility(android.view.View.VISIBLE);
+                            }
+                            if (vScrollIncrementInput != null) {
+                                vScrollIncrementInput.setVisibility(android.view.View.VISIBLE);
+                            }
                         }, 150);
                     }, 150);
                 }, 50);
@@ -284,7 +322,7 @@ public class OverlayService extends Service {
         windowManager.addView(screenshotButton, buttonParams);
 
         // Create minus button (left of screenshot button)
-        minusButton = new AdjustButtonView(this, "-");
+        minusButton = new AdjustButtonView(this, "H-");
 
         int minusLayoutType;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -303,7 +341,7 @@ public class OverlayService extends Service {
         );
 
         minusParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
-        minusParams.y = 550; // Above screenshot button
+        minusParams.y = 450; // Horizontal calibration row (middle row)
         minusParams.x = 240; // Fourth position: Minus button (200px wide, center at 240)
 
         minusButton.setOnClickListener(() -> {
@@ -319,7 +357,7 @@ public class OverlayService extends Service {
         windowManager.addView(minusButton, minusParams);
 
         // Create plus button (right of screenshot button)
-        plusButton = new AdjustButtonView(this, "+");
+        plusButton = new AdjustButtonView(this, "H+");
 
         int plusLayoutType;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -338,7 +376,7 @@ public class OverlayService extends Service {
         );
 
         plusParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
-        plusParams.y = 550; // Above screenshot button
+        plusParams.y = 450; // Horizontal calibration row (middle row)
         plusParams.x = 480; // Fifth position: Plus button (200px wide, center at 480)
 
         plusButton.setOnClickListener(() -> {
@@ -357,6 +395,153 @@ public class OverlayService extends Service {
         });
 
         windowManager.addView(plusButton, plusParams);
+
+        // Create V- button (vertical calibration minus)
+        vMinusButton = new AdjustButtonView(this, "V-");
+
+        int vMinusLayoutType;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            vMinusLayoutType = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
+        } else {
+            vMinusLayoutType = WindowManager.LayoutParams.TYPE_PHONE;
+        }
+
+        WindowManager.LayoutParams vMinusParams = new WindowManager.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                vMinusLayoutType,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+                PixelFormat.TRANSLUCENT
+        );
+
+        vMinusParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+        vMinusParams.y = 650; // Vertical calibration row (top row)
+        vMinusParams.x = 240; // Same horizontal position as minus button
+
+        vMinusButton.setOnClickListener(() -> {
+            // Decrease vertical scroll distance by verticalScrollIncrement AND scroll up
+            verticalScrollDistance -= verticalScrollIncrement;
+            if (vCounterDisplay != null) {
+                vCounterDisplay.setCounter(verticalScrollDistance);
+            }
+            performSmallVerticalScroll(-verticalScrollIncrement); // Negative = scroll UP
+            android.util.Log.d("OverlayService", "Vertical scroll decreased, distance now: " + verticalScrollDistance + "px");
+        });
+
+        windowManager.addView(vMinusButton, vMinusParams);
+
+        // Create V+ button (vertical calibration plus)
+        vPlusButton = new AdjustButtonView(this, "V+");
+
+        int vPlusLayoutType;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            vPlusLayoutType = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
+        } else {
+            vPlusLayoutType = WindowManager.LayoutParams.TYPE_PHONE;
+        }
+
+        WindowManager.LayoutParams vPlusParams = new WindowManager.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                vPlusLayoutType,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+                PixelFormat.TRANSLUCENT
+        );
+
+        vPlusParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+        vPlusParams.y = 650; // Vertical calibration row (same as V-)
+        vPlusParams.x = 480; // Same horizontal position as plus button
+
+        vPlusButton.setOnClickListener(() -> {
+            // Increase vertical scroll distance by verticalScrollIncrement AND scroll down
+            if (verticalScrollDistance + verticalScrollIncrement <= MAX_SCROLL_DISTANCE) {
+                verticalScrollDistance += verticalScrollIncrement;
+                if (vCounterDisplay != null) {
+                    vCounterDisplay.setCounter(verticalScrollDistance);
+                }
+                performSmallVerticalScroll(verticalScrollIncrement); // Positive = scroll DOWN
+                android.util.Log.d("OverlayService", "Vertical scroll increased, distance now: " + verticalScrollDistance + "px");
+            } else {
+                Toast.makeText(this, "Maximum vertical scroll distance reached: " + MAX_SCROLL_DISTANCE + "px", Toast.LENGTH_SHORT).show();
+                android.util.Log.d("OverlayService", "Cannot increase vertical scroll further, max reached: " + MAX_SCROLL_DISTANCE + "px");
+            }
+        });
+
+        windowManager.addView(vPlusButton, vPlusParams);
+
+        // Create vertical reset button
+        vResetButton = new AdjustButtonView(this, "VR");
+
+        int vResetLayoutType;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            vResetLayoutType = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
+        } else {
+            vResetLayoutType = WindowManager.LayoutParams.TYPE_PHONE;
+        }
+
+        WindowManager.LayoutParams vResetParams = new WindowManager.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                vResetLayoutType,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+                PixelFormat.TRANSLUCENT
+        );
+
+        vResetParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+        vResetParams.y = 650; // Vertical calibration row
+        vResetParams.x = 0; // Same horizontal position as reset button
+
+        vResetButton.setOnClickListener(() -> {
+            // Reset vertical scroll distance to default
+            verticalScrollDistance = DEFAULT_VERTICAL_SCROLL_DISTANCE;
+            if (vCounterDisplay != null) {
+                vCounterDisplay.setCounter(verticalScrollDistance);
+            }
+            android.util.Log.d("OverlayService", "Vertical scroll reset to default: " + DEFAULT_VERTICAL_SCROLL_DISTANCE + "px");
+        });
+
+        windowManager.addView(vResetButton, vResetParams);
+
+        // Create vertical scroll increment input
+        vScrollIncrementInput = new ScrollIncrementInputView(this);
+        vScrollIncrementInput.setValue(verticalScrollIncrement); // Set default value
+
+        int vInputLayoutType;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            vInputLayoutType = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
+        } else {
+            vInputLayoutType = WindowManager.LayoutParams.TYPE_PHONE;
+        }
+
+        WindowManager.LayoutParams vInputParams = new WindowManager.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                vInputLayoutType,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+                PixelFormat.TRANSLUCENT
+        );
+
+        vInputParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+        vInputParams.y = 650; // Vertical calibration row
+        vInputParams.x = -530; // Same horizontal position as scroll increment input
+
+        // Set up listener to update verticalScrollIncrement when value changes
+        vScrollIncrementInput.setOnValueChangedListener(newValue -> {
+            verticalScrollIncrement = newValue;
+            android.util.Log.d("OverlayService", "Vertical scroll increment changed to: " + verticalScrollIncrement + "px");
+        });
+
+        // Handle click to open dialog for editing
+        vScrollIncrementInput.setOnClickListener(() -> {
+            android.util.Log.d("OverlayService", "VScrollIncrementInput clicked!");
+            showVerticalScrollIncrementDialog();
+        });
+
+        windowManager.addView(vScrollIncrementInput, vInputParams);
 
         // Create reset button (above screenshot button)
         resetButton = new AdjustButtonView(this, "R");
@@ -378,14 +563,18 @@ public class OverlayService extends Service {
         );
 
         resetParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
-        resetParams.y = 550; // Above screenshot button - same row as others
+        resetParams.y = 450; // Horizontal calibration row (middle row)
         resetParams.x = 0; // Third position: Reset button (200px wide, centered at 0)
 
         resetButton.setOnClickListener(() -> {
-            // Reset scroll distance to default
+            // Reset scroll distances to defaults
             scrollDistance = DEFAULT_SCROLL_DISTANCE;
+            verticalScrollDistance = DEFAULT_VERTICAL_SCROLL_DISTANCE;
             if (counterDisplay != null) {
                 counterDisplay.setCounter(scrollDistance);
+            }
+            if (vCounterDisplay != null) {
+                vCounterDisplay.setCounter(verticalScrollDistance);
             }
 
             // Reset square position and size to defaults
@@ -436,7 +625,7 @@ public class OverlayService extends Service {
         );
 
         inputParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
-        inputParams.y = 550; // Same row as other buttons
+        inputParams.y = 450; // Horizontal calibration row (middle row)
         inputParams.x = -530; // First position: Edit button (100px wide, center at -530)
 
         // Set up listener to update scrollIncrement when value changes
@@ -474,10 +663,36 @@ public class OverlayService extends Service {
         );
 
         counterParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
-        counterParams.y = 550; // Same row as other buttons
+        counterParams.y = 450; // Horizontal calibration row (middle row)
         counterParams.x = -290; // Second position: Counter display (300px wide, center at -290)
 
         windowManager.addView(counterDisplay, counterParams);
+
+        // Create vertical counter display (shows vertical scroll distance)
+        vCounterDisplay = new CounterDisplayView(this);
+        vCounterDisplay.setCounter(verticalScrollDistance); // Set initial value to default vertical scrollDistance
+
+        int vCounterLayoutType;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            vCounterLayoutType = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
+        } else {
+            vCounterLayoutType = WindowManager.LayoutParams.TYPE_PHONE;
+        }
+
+        WindowManager.LayoutParams vCounterParams = new WindowManager.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                vCounterLayoutType,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+                PixelFormat.TRANSLUCENT
+        );
+
+        vCounterParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+        vCounterParams.y = 650; // Vertical calibration row
+        vCounterParams.x = -290; // Same horizontal position as regular counter display
+
+        windowManager.addView(vCounterDisplay, vCounterParams);
 
         // Create next line button (to the right of plus button)
         nextLineButton = new NextLineButtonView(this);
@@ -610,6 +825,26 @@ public class OverlayService extends Service {
             windowManager.removeView(nextZoomLevelButton);
             nextZoomLevelButton = null;
         }
+        if (vMinusButton != null && windowManager != null) {
+            windowManager.removeView(vMinusButton);
+            vMinusButton = null;
+        }
+        if (vPlusButton != null && windowManager != null) {
+            windowManager.removeView(vPlusButton);
+            vPlusButton = null;
+        }
+        if (vCounterDisplay != null && windowManager != null) {
+            windowManager.removeView(vCounterDisplay);
+            vCounterDisplay = null;
+        }
+        if (vResetButton != null && windowManager != null) {
+            windowManager.removeView(vResetButton);
+            vResetButton = null;
+        }
+        if (vScrollIncrementInput != null && windowManager != null) {
+            windowManager.removeView(vScrollIncrementInput);
+            vScrollIncrementInput = null;
+        }
     }
 
     private void scrollHorizontallyBySquareWidth() {
@@ -651,9 +886,13 @@ public class OverlayService extends Service {
             // Use slower duration for more precise scrolling
             int duration = 500;
 
-            android.util.Log.d("OverlayService", "Performing scroll gesture with calibrated distance: " + scrollDistance + "px");
+            android.util.Log.d("OverlayService", "========== HORIZONTAL SCROLL ==========");
+            android.util.Log.d("OverlayService", "Scroll distance variable: " + scrollDistance + "px");
+            android.util.Log.d("OverlayService", "Swipe distance used: " + swipeDistance + "px");
             android.util.Log.d("OverlayService", "Square actual position: (" + squareX + "," + squareY + ") size=" + squareSize);
             android.util.Log.d("OverlayService", "Swipe from (" + startX + "," + gestureY + ") to (" + endX + "," + gestureY + ")");
+            android.util.Log.d("OverlayService", "Total swipe distance: " + (startX - endX) + "px");
+            android.util.Log.d("OverlayService", "======================================");
 
             accessibilityService.performHorizontalScroll(startX, gestureY, endX, gestureY, duration);
         } catch (Exception e) {
@@ -700,6 +939,42 @@ public class OverlayService extends Service {
         }
     }
 
+    private void performSmallVerticalScroll(int distance) {
+        ScrollAccessibilityService accessibilityService = ScrollAccessibilityService.getInstance();
+        if (accessibilityService == null) {
+            android.util.Log.e("OverlayService", "Accessibility service not enabled");
+            return;
+        }
+
+        if (windowManager == null) {
+            return;
+        }
+
+        try {
+            DisplayMetrics displayMetrics = new DisplayMetrics();
+            windowManager.getDefaultDisplay().getMetrics(displayMetrics);
+            int screenWidth = displayMetrics.widthPixels;
+            int screenHeight = displayMetrics.heightPixels;
+
+            // Perform gesture at center of screen
+            int centerX = screenWidth / 2;
+            int centerY = screenHeight / 2;
+
+            // distance > 0 = scroll DOWN (swipe UP)
+            // distance < 0 = scroll UP (swipe DOWN)
+            int startY = centerY + (distance / 2);
+            int endY = centerY - (distance / 2);
+
+            // Slower gesture for better scroll recognition
+            int duration = 300;
+
+            android.util.Log.d("OverlayService", "Small vertical scroll: (" + centerX + "," + startY + ") to (" + centerX + "," + endY + ") distance=" + distance + "px");
+            accessibilityService.performVerticalScroll(centerX, startY, centerX, endY, duration);
+        } catch (Exception e) {
+            android.util.Log.e("OverlayService", "Failed to perform small vertical scroll: " + e.getMessage(), e);
+        }
+    }
+
     private void showScrollIncrementDialog() {
         android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert);
         builder.setTitle("Set Scroll Increment (px)");
@@ -719,6 +994,42 @@ public class OverlayService extends Service {
                         scrollIncrementInput.setValue(scrollIncrement);
                     }
                     android.util.Log.d("OverlayService", "Scroll increment updated to: " + scrollIncrement + "px");
+                }
+            } catch (NumberFormatException e) {
+                android.util.Log.e("OverlayService", "Invalid number entered");
+            }
+        });
+
+        builder.setNegativeButton("Cancel", (dialog, which) -> dialog.cancel());
+
+        android.app.AlertDialog dialog = builder.create();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            dialog.getWindow().setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY);
+        } else {
+            dialog.getWindow().setType(WindowManager.LayoutParams.TYPE_SYSTEM_ALERT);
+        }
+        dialog.show();
+    }
+
+    private void showVerticalScrollIncrementDialog() {
+        android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert);
+        builder.setTitle("Set Vertical Scroll Increment (px)");
+
+        final android.widget.EditText input = new android.widget.EditText(this);
+        input.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        input.setText(String.valueOf(verticalScrollIncrement));
+        input.setSelection(input.getText().length());
+        builder.setView(input);
+
+        builder.setPositiveButton("OK", (dialog, which) -> {
+            try {
+                int newValue = Integer.parseInt(input.getText().toString());
+                if (newValue > 0 && newValue <= 500) {
+                    verticalScrollIncrement = newValue;
+                    if (vScrollIncrementInput != null) {
+                        vScrollIncrementInput.setValue(verticalScrollIncrement);
+                    }
+                    android.util.Log.d("OverlayService", "Vertical scroll increment updated to: " + verticalScrollIncrement + "px");
                 }
             } catch (NumberFormatException e) {
                 android.util.Log.e("OverlayService", "Invalid number entered");
@@ -806,12 +1117,18 @@ public class OverlayService extends Service {
 
             // First, scroll down by the square size (one line)
             // Swipe UP to scroll DOWN content
-            int verticalDistance = scrollDistance;
+            int verticalDistance = verticalScrollDistance; // Use separate vertical calibration
             int startY = centerY + (verticalDistance / 2);
             int endY = centerY - (verticalDistance / 2);
 
-            android.util.Log.d("OverlayService", "Step 1: Scrolling down by " + verticalDistance + "px");
+            android.util.Log.d("OverlayService", "========== VERTICAL SCROLL ==========");
+            android.util.Log.d("OverlayService", "Horizontal scroll distance: " + scrollDistance + "px");
+            android.util.Log.d("OverlayService", "Vertical scroll distance: " + verticalScrollDistance + "px");
+            android.util.Log.d("OverlayService", "Vertical distance used: " + verticalDistance + "px");
+            android.util.Log.d("OverlayService", "Screen center: (" + centerX + "," + centerY + ")");
             android.util.Log.d("OverlayService", "Vertical swipe from (" + centerX + "," + startY + ") to (" + centerX + "," + endY + ")");
+            android.util.Log.d("OverlayService", "Total swipe distance: " + (startY - endY) + "px");
+            android.util.Log.d("OverlayService", "======================================");
 
             accessibilityService.performVerticalScroll(centerX, startY, centerX, endY, 500);
 
