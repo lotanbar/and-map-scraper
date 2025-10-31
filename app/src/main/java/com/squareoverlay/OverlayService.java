@@ -58,6 +58,7 @@ public class OverlayService extends Service {
     private static final int MAX_SCROLL_DISTANCE = 1100; // Maximum scroll distance to avoid off-screen gestures
     private static final int SCROLL_DELAY_MS = 600; // Delay between sequential scrolls to account for momentum
     private int multiScreenshotCount = 1; // Number of screenshots to take on next click (default 1)
+    private int multiScreenshotRows = 1; // Number of rows to capture (default 1)
     private boolean isMultiScreenshotInProgress = false; // Flag to prevent re-entry during multi-screenshot
 
     @Override
@@ -222,14 +223,14 @@ public class OverlayService extends Service {
 
         buttonParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
         buttonParams.y = 200; // Larger gap - closer to bottom
-        buttonParams.x = 270; // Screenshot center in centered group
+        buttonParams.x = 280; // Screenshot button - 4th position
 
         screenshotButton.setOnClickListener(() -> {
             if (overlayView != null && !isMultiScreenshotInProgress) {
-                if (multiScreenshotCount > 1) {
-                    // Perform multiple screenshots
+                if (multiScreenshotCount > 1 || multiScreenshotRows > 1) {
+                    // Perform multiple screenshots (potentially multiple rows)
                     isMultiScreenshotInProgress = true;
-                    performMultipleScreenshotsRecursive(0, multiScreenshotCount);
+                    performMultipleRowsRecursive(0, multiScreenshotRows);
                 } else {
                     // Single screenshot
                     overlayView.triggerScreenshot();
@@ -586,7 +587,7 @@ public class OverlayService extends Service {
 
         nextLineParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
         nextLineParams.y = 200; // Same row as screenshot button
-        nextLineParams.x = -540; // Go down center in centered group
+        nextLineParams.x = 0; // Z button - 3rd position (center)
 
         nextLineButton.setOnClickListener(() -> {
             // Mark next screenshot to have 'z' suffix
@@ -617,7 +618,7 @@ public class OverlayService extends Service {
 
         resetParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
         resetParams.y = 200; // Same row as screenshot button
-        resetParams.x = -40; // Reset center in centered group
+        resetParams.x = 560; // Reset button - 5th position (rightmost)
 
         resetButton.setOnClickListener(() -> {
             // Reset scroll distances to defaults
@@ -684,7 +685,7 @@ public class OverlayService extends Service {
 
         fileBrowserParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
         fileBrowserParams.y = 200; // Same row as other buttons
-        fileBrowserParams.x = -310; // Gallery center in centered group
+        fileBrowserParams.x = -560; // Gallery - 1st position (leftmost)
 
         fileBrowserButton.setOnClickListener(() -> {
             openScreenshotFolder();
@@ -713,7 +714,7 @@ public class OverlayService extends Service {
 
         nextZoomLevelParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
         nextZoomLevelParams.y = 200; // Same row as screenshot button
-        nextZoomLevelParams.x = 540; // Zoom center in centered group
+        nextZoomLevelParams.x = -280; // Go down a line button - 2nd position
 
         nextZoomLevelButton.setOnClickListener(() -> {
             processNextZoomLevel();
@@ -1488,20 +1489,49 @@ public class OverlayService extends Service {
         android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert);
         builder.setTitle("Set Screenshot Count");
 
-        final android.widget.EditText input = new android.widget.EditText(this);
-        input.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
-        input.setText(String.valueOf(multiScreenshotCount));
-        input.setSelection(input.getText().length());
-        builder.setView(input);
+        // Create a container layout for two inputs
+        android.widget.LinearLayout layout = new android.widget.LinearLayout(this);
+        layout.setOrientation(android.widget.LinearLayout.VERTICAL);
+        layout.setPadding(50, 40, 50, 10);
+
+        // First input: Screenshots per row
+        android.widget.TextView label1 = new android.widget.TextView(this);
+        label1.setText("Screenshots per row:");
+        layout.addView(label1);
+
+        final android.widget.EditText input1 = new android.widget.EditText(this);
+        input1.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        input1.setText(String.valueOf(multiScreenshotCount));
+        input1.setSelection(input1.getText().length());
+        layout.addView(input1);
+
+        // Second input: Number of rows
+        android.widget.TextView label2 = new android.widget.TextView(this);
+        label2.setText("Number of rows:");
+        label2.setPadding(0, 20, 0, 0);
+        layout.addView(label2);
+
+        final android.widget.EditText input2 = new android.widget.EditText(this);
+        input2.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        input2.setText(String.valueOf(multiScreenshotRows));
+        input2.setSelection(input2.getText().length());
+        layout.addView(input2);
+
+        builder.setView(layout);
 
         builder.setPositiveButton("OK", (dialog, which) -> {
             try {
-                int count = Integer.parseInt(input.getText().toString());
-                if (count > 0 && count <= 100) {
-                    multiScreenshotCount = count;
-                    Toast.makeText(this, "Next click will take " + count + " screenshot" + (count > 1 ? "s" : ""), Toast.LENGTH_SHORT).show();
+                int screenshotsPerRow = Integer.parseInt(input1.getText().toString());
+                int rows = Integer.parseInt(input2.getText().toString());
+
+                if (screenshotsPerRow > 0 && screenshotsPerRow <= 100 && rows > 0 && rows <= 50) {
+                    multiScreenshotCount = screenshotsPerRow;
+                    multiScreenshotRows = rows;
+                    String message = "Next click: " + screenshotsPerRow + " screenshot" + (screenshotsPerRow > 1 ? "s" : "") +
+                                   " × " + rows + " row" + (rows > 1 ? "s" : "");
+                    Toast.makeText(this, message, Toast.LENGTH_LONG).show();
                 } else {
-                    Toast.makeText(this, "Please enter a number between 1 and 100", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, "Screenshots: 1-100, Rows: 1-50", Toast.LENGTH_SHORT).show();
                 }
             } catch (NumberFormatException e) {
                 Toast.makeText(this, "Invalid number", Toast.LENGTH_SHORT).show();
@@ -1519,10 +1549,43 @@ public class OverlayService extends Service {
         dialog.show();
     }
 
-    private void performMultipleScreenshotsRecursive(int current, int total) {
-        if (current >= total) {
+    private void performMultipleRowsRecursive(int currentRow, int totalRows) {
+        if (currentRow >= totalRows) {
             isMultiScreenshotInProgress = false;
-            Toast.makeText(this, "Completed " + total + " screenshot" + (total > 1 ? "s" : ""), Toast.LENGTH_LONG).show();
+            int totalScreenshots = multiScreenshotCount * totalRows;
+            Toast.makeText(this, "Completed " + totalScreenshots + " screenshot" + (totalScreenshots > 1 ? "s" : "") +
+                          " (" + totalRows + " row" + (totalRows > 1 ? "s" : "") + ")", Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        // Perform one row of screenshots
+        performMultipleScreenshotsRecursive(0, multiScreenshotCount, currentRow, totalRows);
+    }
+
+    private void performMultipleScreenshotsRecursive(int current, int total, int currentRow, int totalRows) {
+        if (current >= total) {
+            // Finished this row
+            if (currentRow < totalRows - 1) {
+                // Not the last row, need to go down one line
+                // Mark next screenshot as line start for the 'z' suffix
+                nextScreenshotIsLineStart = true;
+
+                // Calculate time needed for goDownOneLine
+                // goDownOneLine does: vertical scroll (500ms) + wait (SCROLL_DELAY_MS = 600ms) + horizontal scrolls back
+                // Each horizontal scroll back takes 500ms + 600ms delay
+                // Total time = 500 + 600 + (screenshotCount * 1100ms)
+                int goDownDelay = 500 + SCROLL_DELAY_MS + (screenshotCount * (500 + SCROLL_DELAY_MS));
+
+                goDownOneLine();
+
+                // Wait for goDownOneLine to complete, then start next row
+                new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+                    performMultipleRowsRecursive(currentRow + 1, totalRows);
+                }, goDownDelay + 1000); // Extra 1 second buffer for safety
+            } else {
+                // Last row finished
+                performMultipleRowsRecursive(currentRow + 1, totalRows);
+            }
             return;
         }
 
@@ -1533,7 +1596,7 @@ public class OverlayService extends Service {
             // Total time per screenshot: 50ms + 100ms (capture) + 150ms + 500ms (scroll) + 600ms (settle) + 150ms = 1550ms
             // Adding buffer for safety: 2000ms
             new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
-                performMultipleScreenshotsRecursive(current + 1, total);
+                performMultipleScreenshotsRecursive(current + 1, total, currentRow, totalRows);
             }, 2000);
         } else {
             isMultiScreenshotInProgress = false;
