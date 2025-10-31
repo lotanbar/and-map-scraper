@@ -33,6 +33,7 @@ public class OverlayService extends Service {
     private int scrollDistance = 0; // Accumulated scroll distance in pixels
     private int scrollIncrement = 30; // Dynamic scroll increment, default 30 pixels
     private static final int MAX_SCROLL_DISTANCE = 1100; // Maximum scroll distance to avoid off-screen gestures
+    private int rotationDegrees = 0; // Accumulated rotation in degrees (positive = clockwise, negative = counter-clockwise)
 
     @Override
     public IBinder onBind(Intent intent) {
@@ -352,10 +353,11 @@ public class OverlayService extends Service {
 
         resetButton.setOnClickListener(() -> {
             scrollDistance = 0;
+            rotationDegrees = 0; // Reset rotation tracking
             if (counterDisplay != null) {
-                counterDisplay.setCounter(scrollDistance);
+                counterDisplay.setCounter(rotationDegrees); // Show rotation degrees
             }
-            android.util.Log.d("OverlayService", "Scroll distance reset to 0");
+            android.util.Log.d("OverlayService", "Scroll distance and rotation reset to 0");
         });
 
         windowManager.addView(resetButton, resetParams);
@@ -450,7 +452,11 @@ public class OverlayService extends Service {
 
         rotateCounterClockwiseButton.setOnClickListener(() -> {
             performRotation(false); // Counter-clockwise
-            android.util.Log.d("OverlayService", "Counter-clockwise button clicked!");
+            rotationDegrees -= 3; // Track rotation (accounting for momentum)
+            if (counterDisplay != null) {
+                counterDisplay.setCounter(rotationDegrees);
+            }
+            android.util.Log.d("OverlayService", "Counter-clockwise button clicked! Rotation: " + rotationDegrees + "°");
         });
 
         windowManager.addView(rotateCounterClockwiseButton, rotateCCWParams);
@@ -480,8 +486,12 @@ public class OverlayService extends Service {
         rotateCWParams.x = -330;
 
         rotateClockwiseButton.setOnClickListener(() -> {
-            android.util.Log.d("OverlayService", "Clockwise button clicked!");
             performRotation(true); // Clockwise
+            rotationDegrees += 3; // Track rotation (accounting for momentum)
+            if (counterDisplay != null) {
+                counterDisplay.setCounter(rotationDegrees);
+            }
+            android.util.Log.d("OverlayService", "Clockwise button clicked! Rotation: " + rotationDegrees + "°");
         });
 
         windowManager.addView(rotateClockwiseButton, rotateCWParams);
@@ -596,8 +606,8 @@ public class OverlayService extends Service {
             // Perform very gentle rotation gesture at screen center
             // This rotates the CONTENT on screen (like a map), NOT the overlay square
             // The accessibility service dispatches real touch events to the underlying app
-            // Duration of 400ms for smooth, natural rotation
-            int duration = 400;
+            // Duration of 1500ms for slow, precise rotation (prevents zoom detection)
+            int duration = 1500;
 
             android.util.Log.d("OverlayService", "Performing " + (clockwise ? "clockwise" : "counter-clockwise") + " rotation on screen content");
             accessibilityService.performRotation(screenCenterX, screenCenterY, clockwise, duration);

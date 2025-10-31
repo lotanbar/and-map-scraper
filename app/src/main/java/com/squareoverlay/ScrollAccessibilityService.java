@@ -82,9 +82,11 @@ public class ScrollAccessibilityService extends AccessibilityService {
             double startAngle1 = Math.toRadians(-45); // Upper right diagonal
             double startAngle2 = Math.toRadians(135); // Lower left diagonal
 
-            // Gentle rotation: 15 degrees for better recognition
+            // Clever rotation: 355 degrees + momentum = ~363 total
+            // Gesture does 355°, momentum adds ~8°, total = 363° (360 + 3 visual)
+            // NOTE: Momentum varies by app, may need adjustment
             // NOTE: Y-axis is inverted on Android (increases downward), so signs are flipped
-            double rotationAmount = Math.toRadians(clockwise ? -15 : 15);
+            double rotationAmount = Math.toRadians(clockwise ? -355 : 355);
 
             double endAngle1 = startAngle1 + rotationAmount;
             double endAngle2 = startAngle2 + rotationAmount;
