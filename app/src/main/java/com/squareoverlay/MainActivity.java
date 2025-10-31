@@ -22,6 +22,7 @@ public class MainActivity extends Activity {
         // Simple layout
         android.widget.LinearLayout layout = new android.widget.LinearLayout(this);
         layout.setOrientation(android.widget.LinearLayout.VERTICAL);
+        layout.setGravity(android.view.Gravity.CENTER_VERTICAL);
         layout.setPadding(40, 40, 40, 40);
         
         TextView title = new TextView(this);

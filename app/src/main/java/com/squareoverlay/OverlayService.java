@@ -8,11 +8,14 @@ import android.content.Intent;
 import android.content.pm.ServiceInfo;
 import android.graphics.PixelFormat;
 import android.os.Build;
+import android.os.Environment;
 import android.os.IBinder;
 import android.util.DisplayMetrics;
 import android.view.Gravity;
 import android.view.WindowManager;
 import android.widget.Toast;
+
+import java.io.File;
 
 public class OverlayService extends Service {
 
@@ -29,11 +32,20 @@ public class OverlayService extends Service {
     private ScrollIncrementInputView scrollIncrementInput;
     private NextLineButtonView nextLineButton;
     private FileBrowserButtonView fileBrowserButton;
+    private NextZoomLevelButtonView nextZoomLevelButton;
     private ScreenshotService screenshotService;
-    private int scrollDistance = 715; // Accumulated scroll distance in pixels (default 715px)
+
+    // Default values
+    private static final int DEFAULT_SCROLL_DISTANCE = 773;
+    private static final float DEFAULT_SQUARE_SIZE = 695f;
+    private static final int DEFAULT_SQUARE_X = 338;
+    private static final int DEFAULT_SQUARE_Y = 117;
+
+    private int scrollDistance = DEFAULT_SCROLL_DISTANCE; // Accumulated scroll distance in pixels
     private int scrollIncrement = 30; // Dynamic scroll increment, default 30 pixels
     private int screenshotCount = 0; // Track number of screenshots taken (number of horizontal scrolls)
     private int screenshotNumber = 1; // Sequential number for screenshot filenames (1, 2, 3...)
+    private boolean nextScreenshotIsLineStart = false; // Flag to mark next screenshot with 'z' suffix
     private static final int MAX_SCROLL_DISTANCE = 1100; // Maximum scroll distance to avoid off-screen gestures
     private static final int SCROLL_DELAY_MS = 600; // Delay between sequential scrolls to account for momentum
 
@@ -119,9 +131,9 @@ public class OverlayService extends Service {
         int screenHeight = displayMetrics.heightPixels;
 
         // Default square size and position
-        float initialSquareSize = 695f;
-        int squareX = 338;
-        int squareY = 117;
+        float initialSquareSize = DEFAULT_SQUARE_SIZE;
+        int squareX = DEFAULT_SQUARE_X;
+        int squareY = DEFAULT_SQUARE_Y;
 
         int overlayWidth = (int)initialSquareSize;
         int overlayHeight = (int)initialSquareSize;
@@ -180,10 +192,16 @@ public class OverlayService extends Service {
                 if (fileBrowserButton != null) {
                     fileBrowserButton.setVisibility(android.view.View.INVISIBLE);
                 }
+                if (nextZoomLevelButton != null) {
+                    nextZoomLevelButton.setVisibility(android.view.View.INVISIBLE);
+                }
 
                 // Wait for UI to update, then capture
                 new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
-                    screenshotService.captureScreenshot(xPercent, yPercent, widthPercent, heightPercent, screenshotNumber);
+                    screenshotService.captureScreenshot(xPercent, yPercent, widthPercent, heightPercent, screenshotNumber, nextScreenshotIsLineStart);
+
+                    // Reset line start flag after use
+                    nextScreenshotIsLineStart = false;
 
                     // Increment screenshot counter and screenshot number
                     screenshotCount++;
@@ -220,6 +238,9 @@ public class OverlayService extends Service {
                             }
                             if (fileBrowserButton != null) {
                                 fileBrowserButton.setVisibility(android.view.View.VISIBLE);
+                            }
+                            if (nextZoomLevelButton != null) {
+                                nextZoomLevelButton.setVisibility(android.view.View.VISIBLE);
                             }
                         }, 150);
                     }, 150);
@@ -361,11 +382,35 @@ public class OverlayService extends Service {
         resetParams.x = 0; // Third position: Reset button (200px wide, centered at 0)
 
         resetButton.setOnClickListener(() -> {
-            scrollDistance = 0;
+            // Reset scroll distance to default
+            scrollDistance = DEFAULT_SCROLL_DISTANCE;
             if (counterDisplay != null) {
                 counterDisplay.setCounter(scrollDistance);
             }
-            android.util.Log.d("OverlayService", "Scroll distance reset to 0");
+
+            // Reset square position and size to defaults
+            if (overlayView != null && windowManager != null) {
+                WindowManager.LayoutParams overlayParams = (WindowManager.LayoutParams) overlayView.getLayoutParams();
+                if (overlayParams != null) {
+                    // Reset position
+                    overlayParams.x = DEFAULT_SQUARE_X;
+                    overlayParams.y = DEFAULT_SQUARE_Y;
+
+                    // Reset size
+                    overlayParams.width = (int) DEFAULT_SQUARE_SIZE;
+                    overlayParams.height = (int) DEFAULT_SQUARE_SIZE;
+
+                    // Apply changes
+                    windowManager.updateViewLayout(overlayView, overlayParams);
+
+                    // Reset the overlay view's internal size
+                    overlayView.setSquareSize(DEFAULT_SQUARE_SIZE);
+
+                    android.util.Log.d("OverlayService", "Reset to defaults: size=" + DEFAULT_SQUARE_SIZE +
+                                       ", pos=(" + DEFAULT_SQUARE_X + "," + DEFAULT_SQUARE_Y +
+                                       "), scrollDistance=" + DEFAULT_SCROLL_DISTANCE);
+                }
+            }
         });
 
         windowManager.addView(resetButton, resetParams);
@@ -458,6 +503,8 @@ public class OverlayService extends Service {
         nextLineParams.x = -((280 + 40) / 2); // Half of (camera width + gap) = -160
 
         nextLineButton.setOnClickListener(() -> {
+            // Mark next screenshot to have 'z' suffix
+            nextScreenshotIsLineStart = true;
             goDownOneLine();
         });
 
@@ -491,6 +538,35 @@ public class OverlayService extends Service {
         });
 
         windowManager.addView(fileBrowserButton, fileBrowserParams);
+
+        // Create next zoom level button (to the right of screenshot button)
+        nextZoomLevelButton = new NextZoomLevelButtonView(this);
+
+        int nextZoomLevelLayoutType;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            nextZoomLevelLayoutType = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
+        } else {
+            nextZoomLevelLayoutType = WindowManager.LayoutParams.TYPE_PHONE;
+        }
+
+        WindowManager.LayoutParams nextZoomLevelParams = new WindowManager.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                nextZoomLevelLayoutType,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+                PixelFormat.TRANSLUCENT
+        );
+
+        nextZoomLevelParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+        nextZoomLevelParams.y = 200; // Same row as screenshot button
+        nextZoomLevelParams.x = ((280 + 40) / 2) + 280 + 40; // Right of camera = 160 + 280 + 40 = 480
+
+        nextZoomLevelButton.setOnClickListener(() -> {
+            processNextZoomLevel();
+        });
+
+        windowManager.addView(nextZoomLevelButton, nextZoomLevelParams);
     }
 
     private void hideOverlay() {
@@ -529,6 +605,10 @@ public class OverlayService extends Service {
         if (fileBrowserButton != null && windowManager != null) {
             windowManager.removeView(fileBrowserButton);
             fileBrowserButton = null;
+        }
+        if (nextZoomLevelButton != null && windowManager != null) {
+            windowManager.removeView(nextZoomLevelButton);
+            nextZoomLevelButton = null;
         }
     }
 
@@ -660,15 +740,38 @@ public class OverlayService extends Service {
         android.util.Log.d("OverlayService", "openScreenshotFolder called");
 
         try {
-            // Launch OnePlus File Manager directly
-            android.content.Intent intent = new android.content.Intent();
-            intent.setClassName("com.oneplus.filemanager", "com.oplus.filemanager.main.ui.MainActivity");
+            File picturesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES);
+            File appDir = new File(picturesDir, "SquareOverlay");
+
+            // Create directory if it doesn't exist
+            if (!appDir.exists()) {
+                appDir.mkdirs();
+            }
+
+            // Simple approach: Just open any file manager and let user navigate
+            // Use ACTION_OPEN_DOCUMENT_TREE or ACTION_VIEW with the Pictures directory
+            android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_VIEW);
+            intent.setDataAndType(android.net.Uri.parse("content://com.android.externalstorage.documents/document/primary%3APictures%2FSquareOverlay"),
+                                  "vnd.android.document/directory");
             intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+
+            android.util.Log.d("OverlayService", "Opening DocumentsUI at SquareOverlay folder");
             startActivity(intent);
-            android.util.Log.d("OverlayService", "Opened OnePlus File Manager");
+            android.util.Log.d("OverlayService", "Opened file browser");
         } catch (Exception e) {
-            android.util.Log.e("OverlayService", "Failed to open file manager: " + e.getMessage(), e);
-            Toast.makeText(this, "Could not open file manager", Toast.LENGTH_SHORT).show();
+            android.util.Log.e("OverlayService", "Failed with DocumentsUI, trying OnePlus: " + e.getMessage());
+
+            // Fallback: Launch OnePlus File Manager (what was working before)
+            try {
+                android.content.Intent intent = new android.content.Intent();
+                intent.setClassName("com.oneplus.filemanager", "com.oplus.filemanager.main.ui.MainActivity");
+                intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(intent);
+                android.util.Log.d("OverlayService", "Opened OnePlus File Manager");
+            } catch (Exception ex) {
+                android.util.Log.e("OverlayService", "All file browser attempts failed: " + ex.getMessage(), ex);
+                Toast.makeText(this, "Could not open file manager", Toast.LENGTH_SHORT).show();
+            }
         }
     }
 
@@ -764,6 +867,198 @@ public class OverlayService extends Service {
         } catch (Exception e) {
             android.util.Log.e("OverlayService", "Failed to scroll left: " + e.getMessage(), e);
         }
+    }
+
+    private void processNextZoomLevel() {
+        android.util.Log.d("OverlayService", "processNextZoomLevel called");
+
+        try {
+            File picturesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES);
+            File appDir = new File(picturesDir, "SquareOverlay");
+
+            if (!appDir.exists() || !appDir.isDirectory()) {
+                Toast.makeText(this, "Output directory not found", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            // Find all PNG files in the output directory
+            File[] pngFiles = appDir.listFiles((dir, name) -> name.toLowerCase().endsWith(".png") && !name.startsWith("zoom"));
+
+            if (pngFiles == null || pngFiles.length == 0) {
+                Toast.makeText(this, "No images found to stitch", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            // Find the next zoom level number
+            int nextZoomLevel = 1;
+            while (new File(appDir, "zoom" + nextZoomLevel).exists()) {
+                nextZoomLevel++;
+            }
+
+            android.util.Log.d("OverlayService", "Next zoom level: " + nextZoomLevel);
+
+            // Create the zoom folder
+            File zoomFolder = new File(appDir, "zoom" + nextZoomLevel);
+            if (!zoomFolder.mkdirs()) {
+                Toast.makeText(this, "Failed to create zoom folder", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            // Move all PNG files to the zoom folder
+            for (File file : pngFiles) {
+                File dest = new File(zoomFolder, file.getName());
+                if (!file.renameTo(dest)) {
+                    android.util.Log.e("OverlayService", "Failed to move file: " + file.getName());
+                }
+            }
+
+            // Reset counters after successfully moving files
+            screenshotCount = 0;
+            screenshotNumber = 1;
+            android.util.Log.d("OverlayService", "Reset screenshot counters: count=0, number=1");
+
+            // Now stitch the images using ImageMagick
+            stitchImages(zoomFolder, new File(appDir, "zoom" + nextZoomLevel + ".png"));
+
+            Toast.makeText(this, "Zoom level " + nextZoomLevel + " created", Toast.LENGTH_SHORT).show();
+
+        } catch (Exception e) {
+            android.util.Log.e("OverlayService", "Failed to process zoom level: " + e.getMessage(), e);
+            Toast.makeText(this, "Failed to create zoom level", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void stitchImages(File sourceFolder, File outputFile) {
+        new Thread(() -> {
+            try {
+                android.util.Log.d("OverlayService", "Starting Java-based image stitching");
+
+                // Get all image files and sort them
+                File[] imageFiles = sourceFolder.listFiles((dir, name) -> name.toLowerCase().endsWith(".png"));
+
+                if (imageFiles == null || imageFiles.length == 0) {
+                    android.util.Log.e("OverlayService", "No images found in zoom folder");
+                    return;
+                }
+
+                // Sort files numerically (extract number from filename)
+                java.util.Arrays.sort(imageFiles, (f1, f2) -> {
+                    String name1 = f1.getName().replaceAll("[^0-9]", "");
+                    String name2 = f2.getName().replaceAll("[^0-9]", "");
+                    int num1 = name1.isEmpty() ? 0 : Integer.parseInt(name1);
+                    int num2 = name2.isEmpty() ? 0 : Integer.parseInt(name2);
+                    return Integer.compare(num1, num2);
+                });
+
+                // Group files into rows (files with 'z' suffix start new rows)
+                java.util.List<java.util.List<File>> rows = new java.util.ArrayList<>();
+                java.util.List<File> currentRow = new java.util.ArrayList<>();
+
+                for (File file : imageFiles) {
+                    String name = file.getName();
+
+                    // Check if this file starts a new row (has 'z' before .png)
+                    if (name.contains("z.png") && !currentRow.isEmpty()) {
+                        rows.add(currentRow);
+                        currentRow = new java.util.ArrayList<>();
+                    }
+
+                    currentRow.add(file);
+                }
+
+                // Add the last row
+                if (!currentRow.isEmpty()) {
+                    rows.add(currentRow);
+                }
+
+                android.util.Log.d("OverlayService", "Stitching " + imageFiles.length + " images into " + rows.size() + " rows");
+
+                // Create row bitmaps
+                java.util.List<android.graphics.Bitmap> rowBitmaps = new java.util.ArrayList<>();
+
+                for (int i = 0; i < rows.size(); i++) {
+                    java.util.List<File> row = rows.get(i);
+                    android.util.Log.d("OverlayService", "Stitching row " + (i + 1) + " with " + row.size() + " images");
+
+                    // Load all bitmaps for this row
+                    java.util.List<android.graphics.Bitmap> bitmapsInRow = new java.util.ArrayList<>();
+                    int totalWidth = 0;
+                    int maxHeight = 0;
+
+                    for (File file : row) {
+                        android.graphics.Bitmap bitmap = android.graphics.BitmapFactory.decodeFile(file.getAbsolutePath());
+                        if (bitmap != null) {
+                            bitmapsInRow.add(bitmap);
+                            totalWidth += bitmap.getWidth();
+                            maxHeight = Math.max(maxHeight, bitmap.getHeight());
+                        } else {
+                            android.util.Log.e("OverlayService", "Failed to load bitmap: " + file.getName());
+                        }
+                    }
+
+                    // Stitch this row horizontally
+                    if (!bitmapsInRow.isEmpty()) {
+                        android.graphics.Bitmap rowBitmap = android.graphics.Bitmap.createBitmap(
+                            totalWidth, maxHeight, android.graphics.Bitmap.Config.ARGB_8888);
+                        android.graphics.Canvas canvas = new android.graphics.Canvas(rowBitmap);
+
+                        int xOffset = 0;
+                        for (android.graphics.Bitmap bitmap : bitmapsInRow) {
+                            canvas.drawBitmap(bitmap, xOffset, 0, null);
+                            xOffset += bitmap.getWidth();
+                            bitmap.recycle(); // Free memory
+                        }
+
+                        rowBitmaps.add(rowBitmap);
+                        android.util.Log.d("OverlayService", "Row " + (i + 1) + " stitched: " + totalWidth + "x" + maxHeight);
+                    }
+                }
+
+                // Now stitch all rows vertically
+                if (!rowBitmaps.isEmpty()) {
+                    int maxWidth = 0;
+                    int totalHeight = 0;
+
+                    for (android.graphics.Bitmap rowBitmap : rowBitmaps) {
+                        maxWidth = Math.max(maxWidth, rowBitmap.getWidth());
+                        totalHeight += rowBitmap.getHeight();
+                    }
+
+                    android.util.Log.d("OverlayService", "Creating final bitmap: " + maxWidth + "x" + totalHeight);
+
+                    android.graphics.Bitmap finalBitmap = android.graphics.Bitmap.createBitmap(
+                        maxWidth, totalHeight, android.graphics.Bitmap.Config.ARGB_8888);
+                    android.graphics.Canvas finalCanvas = new android.graphics.Canvas(finalBitmap);
+
+                    int yOffset = 0;
+                    for (android.graphics.Bitmap rowBitmap : rowBitmaps) {
+                        finalCanvas.drawBitmap(rowBitmap, 0, yOffset, null);
+                        yOffset += rowBitmap.getHeight();
+                        rowBitmap.recycle(); // Free memory
+                    }
+
+                    // Save the final bitmap
+                    java.io.FileOutputStream fos = new java.io.FileOutputStream(outputFile);
+                    finalBitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, fos);
+                    fos.flush();
+                    fos.close();
+                    finalBitmap.recycle();
+
+                    android.util.Log.d("OverlayService", "Stitching complete: " + outputFile.getAbsolutePath());
+
+                    // Show success message on UI thread
+                    new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+                        Toast.makeText(OverlayService.this, "Zoom level stitched successfully!", Toast.LENGTH_LONG).show();
+                    });
+                }
+
+            } catch (Exception e) {
+                android.util.Log.e("OverlayService", "Failed to stitch images: " + e.getMessage(), e);
+                new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+                    Toast.makeText(OverlayService.this, "Stitching failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                });
+            }
+        }).start();
     }
 
     @Override

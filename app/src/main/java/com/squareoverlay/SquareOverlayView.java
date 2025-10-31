@@ -99,6 +99,12 @@ public class SquareOverlayView extends View {
         }
     }
 
+    public void setSquareSize(float size) {
+        this.squareSize = size;
+        requestLayout();
+        invalidate();
+    }
+
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         // View size matches square size exactly
