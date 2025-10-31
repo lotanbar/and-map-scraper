@@ -27,6 +27,8 @@ public class OverlayService extends Service {
     private AdjustButtonView resetButton;
     private CounterDisplayView counterDisplay;
     private ScrollIncrementInputView scrollIncrementInput;
+    private RotateButtonView rotateClockwiseButton;
+    private RotateButtonView rotateCounterClockwiseButton;
     private ScreenshotService screenshotService;
     private int scrollDistance = 0; // Accumulated scroll distance in pixels
     private int scrollIncrement = 30; // Dynamic scroll increment, default 30 pixels
@@ -168,6 +170,12 @@ public class OverlayService extends Service {
                 if (scrollIncrementInput != null) {
                     scrollIncrementInput.setVisibility(android.view.View.INVISIBLE);
                 }
+                if (rotateClockwiseButton != null) {
+                    rotateClockwiseButton.setVisibility(android.view.View.INVISIBLE);
+                }
+                if (rotateCounterClockwiseButton != null) {
+                    rotateCounterClockwiseButton.setVisibility(android.view.View.INVISIBLE);
+                }
 
                 // Wait for UI to update, then capture
                 new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
@@ -197,6 +205,12 @@ public class OverlayService extends Service {
                             }
                             if (scrollIncrementInput != null) {
                                 scrollIncrementInput.setVisibility(android.view.View.VISIBLE);
+                            }
+                            if (rotateClockwiseButton != null) {
+                                rotateClockwiseButton.setVisibility(android.view.View.VISIBLE);
+                            }
+                            if (rotateCounterClockwiseButton != null) {
+                                rotateCounterClockwiseButton.setVisibility(android.view.View.VISIBLE);
                             }
                         }, 150);
                     }, 150);
@@ -408,6 +422,69 @@ public class OverlayService extends Service {
         counterParams.x = -290; // Second position: Counter display (300px wide, center at -290)
 
         windowManager.addView(counterDisplay, counterParams);
+
+        // Create counter-clockwise rotation button (left of screenshot button)
+        rotateCounterClockwiseButton = new RotateButtonView(this, false);
+
+        int rotateCCWLayoutType;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            rotateCCWLayoutType = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
+        } else {
+            rotateCCWLayoutType = WindowManager.LayoutParams.TYPE_PHONE;
+        }
+
+        WindowManager.LayoutParams rotateCCWParams = new WindowManager.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                rotateCCWLayoutType,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+                PixelFormat.TRANSLUCENT
+        );
+
+        rotateCCWParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+        rotateCCWParams.y = 350; // Same height as screenshot button
+        // Screenshot button is 500px wide centered at 0, spans -250 to +250
+        // This button is 120px wide, place at -470 to avoid overlap (spans -530 to -410)
+        rotateCCWParams.x = -470;
+
+        rotateCounterClockwiseButton.setOnClickListener(() -> {
+            performRotation(false); // Counter-clockwise
+            android.util.Log.d("OverlayService", "Counter-clockwise button clicked!");
+        });
+
+        windowManager.addView(rotateCounterClockwiseButton, rotateCCWParams);
+
+        // Create clockwise rotation button (between counter-clockwise and screenshot button)
+        rotateClockwiseButton = new RotateButtonView(this, true);
+
+        int rotateCWLayoutType;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            rotateCWLayoutType = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
+        } else {
+            rotateCWLayoutType = WindowManager.LayoutParams.TYPE_PHONE;
+        }
+
+        WindowManager.LayoutParams rotateCWParams = new WindowManager.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                rotateCWLayoutType,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+                PixelFormat.TRANSLUCENT
+        );
+
+        rotateCWParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+        rotateCWParams.y = 350; // Same height as screenshot button
+        // Place at -330 (spans -390 to -270, with 20px gap from screenshot button)
+        rotateCWParams.x = -330;
+
+        rotateClockwiseButton.setOnClickListener(() -> {
+            android.util.Log.d("OverlayService", "Clockwise button clicked!");
+            performRotation(true); // Clockwise
+        });
+
+        windowManager.addView(rotateClockwiseButton, rotateCWParams);
     }
 
     private void hideOverlay() {
@@ -438,6 +515,14 @@ public class OverlayService extends Service {
         if (scrollIncrementInput != null && windowManager != null) {
             windowManager.removeView(scrollIncrementInput);
             scrollIncrementInput = null;
+        }
+        if (rotateClockwiseButton != null && windowManager != null) {
+            windowManager.removeView(rotateClockwiseButton);
+            rotateClockwiseButton = null;
+        }
+        if (rotateCounterClockwiseButton != null && windowManager != null) {
+            windowManager.removeView(rotateCounterClockwiseButton);
+            rotateCounterClockwiseButton = null;
         }
     }
 
@@ -487,6 +572,37 @@ public class OverlayService extends Service {
             accessibilityService.performHorizontalScroll(startX, gestureY, endX, gestureY, duration);
         } catch (Exception e) {
             android.util.Log.e("OverlayService", "Failed to scroll: " + e.getMessage(), e);
+        }
+    }
+
+    private void performRotation(boolean clockwise) {
+        ScrollAccessibilityService accessibilityService = ScrollAccessibilityService.getInstance();
+        if (accessibilityService == null) {
+            android.util.Log.e("OverlayService", "Accessibility service not enabled");
+            Toast.makeText(this, "Please enable Square Overlay accessibility service in Settings", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        if (windowManager == null) {
+            return;
+        }
+
+        try {
+            DisplayMetrics displayMetrics = new DisplayMetrics();
+            windowManager.getDefaultDisplay().getMetrics(displayMetrics);
+            int screenCenterX = displayMetrics.widthPixels / 2;
+            int screenCenterY = displayMetrics.heightPixels / 2;
+
+            // Perform very gentle rotation gesture at screen center
+            // This rotates the CONTENT on screen (like a map), NOT the overlay square
+            // The accessibility service dispatches real touch events to the underlying app
+            // Duration of 400ms for smooth, natural rotation
+            int duration = 400;
+
+            android.util.Log.d("OverlayService", "Performing " + (clockwise ? "clockwise" : "counter-clockwise") + " rotation on screen content");
+            accessibilityService.performRotation(screenCenterX, screenCenterY, clockwise, duration);
+        } catch (Exception e) {
+            android.util.Log.e("OverlayService", "Failed to perform rotation: " + e.getMessage(), e);
         }
     }
 
