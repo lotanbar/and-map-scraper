@@ -87,7 +87,7 @@ public class ScreenshotService {
         Log.d(TAG, "MediaProjection and VirtualDisplay started");
     }
 
-    public void captureScreenshot(float xPercent, float yPercent, float widthPercent, float heightPercent) {
+    public void captureScreenshot(float xPercent, float yPercent, float widthPercent, float heightPercent, int screenshotNumber) {
         if (mediaProjection == null || virtualDisplay == null || imageReader == null) {
             Toast.makeText(context, "Screenshot not ready, please wait...", Toast.LENGTH_SHORT).show();
             return;
@@ -136,7 +136,7 @@ public class ScreenshotService {
 
                     Bitmap croppedBitmap = Bitmap.createBitmap(bitmap, cropX, cropY, cropWidth, cropHeight);
 
-                    saveBitmap(croppedBitmap);
+                    saveBitmap(croppedBitmap, screenshotNumber);
 
                     croppedBitmap.recycle();
 
@@ -158,7 +158,7 @@ public class ScreenshotService {
         }, 100);
     }
 
-    private void saveBitmap(Bitmap bitmap) {
+    private void saveBitmap(Bitmap bitmap, int screenshotNumber) {
         try {
             File picturesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES);
             File appDir = new File(picturesDir, "SquareOverlay");
@@ -167,8 +167,7 @@ public class ScreenshotService {
                 appDir.mkdirs();
             }
 
-            String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date());
-            String filename = "square_" + timestamp + ".png";
+            String filename = screenshotNumber + ".png";
             File file = new File(appDir, filename);
 
             FileOutputStream fos = new FileOutputStream(file);

@@ -28,10 +28,12 @@ public class OverlayService extends Service {
     private CounterDisplayView counterDisplay;
     private ScrollIncrementInputView scrollIncrementInput;
     private NextLineButtonView nextLineButton;
+    private FileBrowserButtonView fileBrowserButton;
     private ScreenshotService screenshotService;
-    private int scrollDistance = 0; // Accumulated scroll distance in pixels
+    private int scrollDistance = 715; // Accumulated scroll distance in pixels (default 715px)
     private int scrollIncrement = 30; // Dynamic scroll increment, default 30 pixels
     private int screenshotCount = 0; // Track number of screenshots taken (number of horizontal scrolls)
+    private int screenshotNumber = 1; // Sequential number for screenshot filenames (1, 2, 3...)
     private static final int MAX_SCROLL_DISTANCE = 1100; // Maximum scroll distance to avoid off-screen gestures
     private static final int SCROLL_DELAY_MS = 600; // Delay between sequential scrolls to account for momentum
 
@@ -110,15 +112,16 @@ public class OverlayService extends Service {
         }
 
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
-        
+
         DisplayMetrics displayMetrics = new DisplayMetrics();
         windowManager.getDefaultDisplay().getMetrics(displayMetrics);
         int screenWidth = displayMetrics.widthPixels;
         int screenHeight = displayMetrics.heightPixels;
 
-        float initialSquareSize = screenWidth * 0.4f;
-        int squareX = (int)((screenWidth - initialSquareSize) / 2);
-        int squareY = (int)((screenHeight - initialSquareSize) / 2);
+        // Default square size and position
+        float initialSquareSize = 695f;
+        int squareX = 338;
+        int squareY = 117;
 
         int overlayWidth = (int)initialSquareSize;
         int overlayHeight = (int)initialSquareSize;
@@ -174,14 +177,18 @@ public class OverlayService extends Service {
                 if (nextLineButton != null) {
                     nextLineButton.setVisibility(android.view.View.INVISIBLE);
                 }
+                if (fileBrowserButton != null) {
+                    fileBrowserButton.setVisibility(android.view.View.INVISIBLE);
+                }
 
                 // Wait for UI to update, then capture
                 new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
-                    screenshotService.captureScreenshot(xPercent, yPercent, widthPercent, heightPercent);
+                    screenshotService.captureScreenshot(xPercent, yPercent, widthPercent, heightPercent, screenshotNumber);
 
-                    // Increment screenshot counter
+                    // Increment screenshot counter and screenshot number
                     screenshotCount++;
-                    android.util.Log.d("OverlayService", "Screenshot taken, count now: " + screenshotCount);
+                    screenshotNumber++;
+                    android.util.Log.d("OverlayService", "Screenshot taken, count: " + screenshotCount + ", next number: " + screenshotNumber);
 
                     // Scroll horizontally by the width of the square after screenshot
                     new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
@@ -210,6 +217,9 @@ public class OverlayService extends Service {
                             }
                             if (nextLineButton != null) {
                                 nextLineButton.setVisibility(android.view.View.VISIBLE);
+                            }
+                            if (fileBrowserButton != null) {
+                                fileBrowserButton.setVisibility(android.view.View.VISIBLE);
                             }
                         }, 150);
                     }, 150);
@@ -241,7 +251,8 @@ public class OverlayService extends Service {
         );
 
         buttonParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
-        buttonParams.y = 350; // 350 pixels from bottom
+        buttonParams.y = 200; // Larger gap - closer to bottom
+        buttonParams.x = (280 + 40) / 2; // Half of (camera width + gap) = 160
 
         screenshotButton.setOnClickListener(() -> {
             if (overlayView != null) {
@@ -399,6 +410,7 @@ public class OverlayService extends Service {
 
         // Create counter display above the button row
         counterDisplay = new CounterDisplayView(this);
+        counterDisplay.setCounter(scrollDistance); // Set initial value to default scrollDistance
 
         int counterLayoutType;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -442,14 +454,43 @@ public class OverlayService extends Service {
         );
 
         nextLineParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
-        nextLineParams.y = 350; // Same row as screenshot button
-        nextLineParams.x = 250; // To the right of screenshot button
+        nextLineParams.y = 200; // Same row as screenshot button
+        nextLineParams.x = -((280 + 40) / 2); // Half of (camera width + gap) = -160
 
         nextLineButton.setOnClickListener(() -> {
             goDownOneLine();
         });
 
         windowManager.addView(nextLineButton, nextLineParams);
+
+        // Create file browser button (to the right of next line button)
+        fileBrowserButton = new FileBrowserButtonView(this);
+
+        int fileBrowserLayoutType;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            fileBrowserLayoutType = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
+        } else {
+            fileBrowserLayoutType = WindowManager.LayoutParams.TYPE_PHONE;
+        }
+
+        WindowManager.LayoutParams fileBrowserParams = new WindowManager.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                fileBrowserLayoutType,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+                PixelFormat.TRANSLUCENT
+        );
+
+        fileBrowserParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+        fileBrowserParams.y = 200; // Same row as other buttons
+        fileBrowserParams.x = -((280 + 40) / 2 + 280 + 40); // Left of next line = -160 - 280 - 40 = -480
+
+        fileBrowserButton.setOnClickListener(() -> {
+            openScreenshotFolder();
+        });
+
+        windowManager.addView(fileBrowserButton, fileBrowserParams);
     }
 
     private void hideOverlay() {
@@ -484,6 +525,10 @@ public class OverlayService extends Service {
         if (nextLineButton != null && windowManager != null) {
             windowManager.removeView(nextLineButton);
             nextLineButton = null;
+        }
+        if (fileBrowserButton != null && windowManager != null) {
+            windowManager.removeView(fileBrowserButton);
+            fileBrowserButton = null;
         }
     }
 
@@ -609,6 +654,22 @@ public class OverlayService extends Service {
             dialog.getWindow().setType(WindowManager.LayoutParams.TYPE_SYSTEM_ALERT);
         }
         dialog.show();
+    }
+
+    private void openScreenshotFolder() {
+        android.util.Log.d("OverlayService", "openScreenshotFolder called");
+
+        try {
+            // Launch OnePlus File Manager directly
+            android.content.Intent intent = new android.content.Intent();
+            intent.setClassName("com.oneplus.filemanager", "com.oplus.filemanager.main.ui.MainActivity");
+            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(intent);
+            android.util.Log.d("OverlayService", "Opened OnePlus File Manager");
+        } catch (Exception e) {
+            android.util.Log.e("OverlayService", "Failed to open file manager: " + e.getMessage(), e);
+            Toast.makeText(this, "Could not open file manager", Toast.LENGTH_SHORT).show();
+        }
     }
 
     private void goDownOneLine() {

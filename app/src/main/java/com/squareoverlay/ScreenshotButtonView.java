@@ -17,9 +17,9 @@ public class ScreenshotButtonView extends View {
     private Paint shadowPaint;
     private RectF buttonRect;
 
-    private static final int BUTTON_WIDTH = 500;
-    private static final int BUTTON_HEIGHT = 140;
-    private static final int CORNER_RADIUS = 70;
+    private static final int BUTTON_WIDTH = 280;
+    private static final int BUTTON_HEIGHT = 200;
+    private static final int CORNER_RADIUS = 30;
 
     private boolean isPressed = false;
 
@@ -38,7 +38,7 @@ public class ScreenshotButtonView extends View {
 
         buttonTextPaint = new Paint();
         buttonTextPaint.setColor(Color.WHITE);
-        buttonTextPaint.setTextSize(50);
+        buttonTextPaint.setTextSize(60);
         buttonTextPaint.setAntiAlias(true);
         buttonTextPaint.setTextAlign(Paint.Align.CENTER);
         buttonTextPaint.setFakeBoldText(true);
@@ -104,9 +104,9 @@ public class ScreenshotButtonView extends View {
         // Reset shader for text
         buttonPaint.setShader(null);
 
-        // Draw camera icon and text
-        String buttonText = "📷 Screenshot";
-        float textY = buttonRect.centerY() + (buttonTextPaint.getTextSize() / 2) - 5;
+        // Draw camera icon only
+        String buttonText = "📷";
+        float textY = buttonRect.centerY() + (buttonTextPaint.getTextSize() / 2) - 10;
         canvas.drawText(buttonText, buttonRect.centerX(), textY, buttonTextPaint);
     }
 

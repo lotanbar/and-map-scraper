@@ -10,14 +10,14 @@ import android.graphics.Shader;
 import android.view.MotionEvent;
 import android.view.View;
 
-public class NextLineButtonView extends View {
+public class FileBrowserButtonView extends View {
 
     private Paint buttonPaint;
     private Paint buttonTextPaint;
     private Paint shadowPaint;
     private RectF buttonRect;
 
-    private static final int BUTTON_WIDTH = 280;
+    private static final int BUTTON_WIDTH = 200;
     private static final int BUTTON_HEIGHT = 200;
     private static final int CORNER_RADIUS = 30;
 
@@ -29,7 +29,7 @@ public class NextLineButtonView extends View {
 
     private OnClickListener clickListener;
 
-    public NextLineButtonView(Context context) {
+    public FileBrowserButtonView(Context context) {
         super(context);
 
         buttonPaint = new Paint();
@@ -84,15 +84,15 @@ public class NextLineButtonView extends View {
             centerY + BUTTON_HEIGHT/2f
         );
 
-        // Create gradient effect - using blue/teal colors to distinguish from other buttons
+        // Create gradient effect - using purple/violet colors
         if (isPressed) {
-            buttonPaint.setColor(Color.rgb(0, 100, 150)); // Darker blue when pressed
+            buttonPaint.setColor(Color.rgb(100, 50, 150)); // Darker purple when pressed
         } else {
             LinearGradient gradient = new LinearGradient(
                 buttonRect.left, buttonRect.top,
                 buttonRect.left, buttonRect.bottom,
-                Color.rgb(33, 150, 243),  // Light blue
-                Color.rgb(0, 120, 200),   // Darker blue
+                Color.rgb(156, 39, 176),  // Light purple
+                Color.rgb(123, 31, 162),  // Darker purple
                 Shader.TileMode.CLAMP
             );
             buttonPaint.setShader(gradient);
@@ -104,9 +104,9 @@ public class NextLineButtonView extends View {
         // Reset shader for text
         buttonPaint.setShader(null);
 
-        // Draw text (↓ symbol)
+        // Draw folder icon
         float textY = buttonRect.centerY() + (buttonTextPaint.getTextSize() / 2) - 10;
-        canvas.drawText("↓", buttonRect.centerX(), textY, buttonTextPaint);
+        canvas.drawText("📁", buttonRect.centerX(), textY, buttonTextPaint);
     }
 
     @Override
@@ -114,29 +114,29 @@ public class NextLineButtonView extends View {
         float touchX = event.getX();
         float touchY = event.getY();
 
-        android.util.Log.d("NextLineButtonView", "Next line button touch: action=" + event.getAction() + " at (" + touchX + "," + touchY + ")");
+        android.util.Log.d("FileBrowserButtonView", "File browser button touch: action=" + event.getAction() + " at (" + touchX + "," + touchY + ")");
 
         switch (event.getAction()) {
             case MotionEvent.ACTION_DOWN:
-                android.util.Log.d("NextLineButtonView", "ACTION_DOWN, buttonRect=" + buttonRect + " contains=" + buttonRect.contains(touchX, touchY));
+                android.util.Log.d("FileBrowserButtonView", "ACTION_DOWN, buttonRect=" + buttonRect + " contains=" + buttonRect.contains(touchX, touchY));
                 if (buttonRect.contains(touchX, touchY)) {
                     isPressed = true;
                     invalidate();
-                    android.util.Log.d("NextLineButtonView", "Next line button pressed");
+                    android.util.Log.d("FileBrowserButtonView", "File browser button pressed");
                     return true;
                 }
-                android.util.Log.d("NextLineButtonView", "Touch outside button rect");
+                android.util.Log.d("FileBrowserButtonView", "Touch outside button rect");
                 return false;
 
             case MotionEvent.ACTION_UP:
-                android.util.Log.d("NextLineButtonView", "ACTION_UP, isPressed=" + isPressed);
+                android.util.Log.d("FileBrowserButtonView", "ACTION_UP, isPressed=" + isPressed);
                 if (isPressed) {
                     isPressed = false;
                     invalidate();
 
                     // If touch is still in bounds, fire click
                     if (buttonRect.contains(touchX, touchY) && clickListener != null) {
-                        android.util.Log.d("NextLineButtonView", "Firing onClick");
+                        android.util.Log.d("FileBrowserButtonView", "Firing onClick");
                         clickListener.onClick();
                     }
                     return true;
@@ -144,7 +144,7 @@ public class NextLineButtonView extends View {
                 return false;
 
             case MotionEvent.ACTION_CANCEL:
-                android.util.Log.d("NextLineButtonView", "ACTION_CANCEL");
+                android.util.Log.d("FileBrowserButtonView", "ACTION_CANCEL");
                 isPressed = false;
                 invalidate();
                 return true;
