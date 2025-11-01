@@ -70,6 +70,7 @@ class OverlayService : Service() {
         0 // Track number of screenshots taken (number of horizontal scrolls)
     private var screenshotNumber = 1 // Sequential number for screenshot filenames (1, 2, 3...)
     private var nextScreenshotIsLineStart = false // Flag to mark next screenshot with 'z' suffix
+    private var currentZoomFolder: String? = null // Track current zoom folder (e.g., "zoom1", "zoom2")
     private var multiScreenshotCount = 1 // Number of screenshots to take on next click (default 1)
     private var multiScreenshotRows = 1 // Number of rows to capture (default 1)
     private var isMultiScreenshotInProgress =
@@ -159,7 +160,7 @@ class OverlayService : Service() {
 
         // Default square size and position
         val initialSquareSize: Float = DEFAULT_SQUARE_SIZE
-        val squareX: Int = DEFAULT_SQUARE_X
+        val squareX: Int = ((screenWidth - initialSquareSize) / 2).toInt() // Center horizontally
         val squareY: Int = DEFAULT_SQUARE_Y
 
         val overlayWidth = initialSquareSize.toInt()
@@ -193,7 +194,10 @@ class OverlayService : Service() {
 
         overlayView!!.setScreenshotCallback(ScreenshotCallback { xPercent: Float, yPercent: Float, widthPercent: Float, heightPercent: Float, onHidden: Runnable? ->
             if (screenshotService != null) {
-                setAllViewsVisible(false)
+                // Only hide UI if not in multi-screenshot mode (UI already hidden)
+                if (!isMultiScreenshotInProgress) {
+                    setAllViewsVisible(false)
+                }
 
                 Handler(Looper.getMainLooper()).postDelayed(Runnable {
                     screenshotService!!.captureScreenshot(
@@ -207,12 +211,17 @@ class OverlayService : Service() {
                     nextScreenshotIsLineStart = false
                     screenshotCount++
                     screenshotNumber++
+                    // Wait for screenshot to complete, then scroll
                     Handler(Looper.getMainLooper()).postDelayed(Runnable {
                         scrollHorizontallyBySquareWidth()
+                        // Wait for scroll to complete
                         Handler(Looper.getMainLooper()).postDelayed(Runnable {
-                            setAllViewsVisible(true)
-                        }, 150)
-                    }, 150)
+                            // Only restore UI if not in multi-screenshot mode
+                            if (!isMultiScreenshotInProgress) {
+                                setAllViewsVisible(true)
+                            }
+                        }, 1100)
+                    }, 1100)
                 }, 50)
             } else {
                 Toast.makeText(this, "Screenshot not initialized", Toast.LENGTH_SHORT).show()
@@ -249,7 +258,12 @@ class OverlayService : Service() {
                 if (multiScreenshotCount > 1 || multiScreenshotRows > 1) {
                     // Perform multiple screenshots (potentially multiple rows)
                     isMultiScreenshotInProgress = true
-                    performMultipleRowsRecursive(0, multiScreenshotRows)
+                    // Hide UI at the very start of multi-screenshot process
+                    setAllViewsVisible(false)
+                    // Small delay to ensure UI is hidden
+                    Handler(Looper.getMainLooper()).postDelayed(Runnable {
+                        performMultipleRowsRecursive(0, multiScreenshotRows)
+                    }, 50)
                 } else {
                     // Single screenshot
                     overlayView!!.triggerScreenshot()
@@ -565,6 +579,11 @@ class OverlayService : Service() {
         counterParams.y = 450 // Horizontal calibration row (middle row)
         counterParams.x = -290 // Second position: Counter display (300px wide, center at -290)
 
+        // Add click listener to open dialog for editing scroll distance
+        counterDisplay?.setCounterClickListener {
+            showScrollDistanceDialog(false)
+        }
+
         windowManager!!.addView(counterDisplay, counterParams)
 
         // Create vertical counter display (shows vertical scroll distance)
@@ -591,6 +610,11 @@ class OverlayService : Service() {
         vCounterParams.y = 650 // Vertical calibration row
         vCounterParams.x = -290 // Same horizontal position as regular counter display
 
+        // Add click listener to open dialog for editing vertical scroll distance
+        vCounterDisplay?.setCounterClickListener {
+            showScrollDistanceDialog(true)
+        }
+
         windowManager!!.addView(vCounterDisplay, vCounterParams)
 
         // Create next line button (to the right of plus button)
@@ -614,7 +638,7 @@ class OverlayService : Service() {
 
         nextLineParams.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
         nextLineParams.y = 200 // Same row as screenshot button
-        nextLineParams.x = 0 // Z button - 3rd position (center)
+        nextLineParams.x = -40 // Go down a line button - 3rd position
 
         nextLineButton?.setButtonClickListener {
             // Mark next screenshot to have 'z' suffix
@@ -672,8 +696,14 @@ class OverlayService : Service() {
             if (overlayView != null && windowManager != null) {
                 val overlayParams = overlayView!!.getLayoutParams() as WindowManager.LayoutParams?
                 if (overlayParams != null) {
+                    // Calculate centered X position
+                    val displayMetrics = DisplayMetrics()
+                    windowManager!!.getDefaultDisplay().getMetrics(displayMetrics)
+                    val screenWidth = displayMetrics.widthPixels
+                    val centeredX = ((screenWidth - DEFAULT_SQUARE_SIZE) / 2).toInt()
+
                     // Reset position
-                    overlayParams.x = DEFAULT_SQUARE_X
+                    overlayParams.x = centeredX
                     overlayParams.y = DEFAULT_SQUARE_Y
 
                     // Reset size
@@ -687,6 +717,12 @@ class OverlayService : Service() {
                     overlayView!!.setSquareSize(DEFAULT_SQUARE_SIZE)
                 }
             }
+
+            // Reset zoom folder and screenshot numbering
+            currentZoomFolder = null
+            screenshotCount = 0
+            screenshotNumber = 1
+            screenshotService?.setZoomFolder(null)
         }
 
         windowManager!!.addView(resetButton, resetParams)
@@ -741,7 +777,7 @@ class OverlayService : Service() {
 
         nextZoomLevelParams.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
         nextZoomLevelParams.y = 200 // Same row as screenshot button
-        nextZoomLevelParams.x = -280 // Go down a line button - 2nd position
+        nextZoomLevelParams.x = -320 // Z button - 2nd position
 
         nextZoomLevelButton?.setButtonClickListener {
             processNextZoomLevel()
@@ -838,24 +874,15 @@ class OverlayService : Service() {
             val screenWidth = displayMetrics.widthPixels
             val screenHeight = displayMetrics.heightPixels
 
-            // Get the square's ACTUAL position on screen
-            val location = IntArray(2)
-            overlayView!!.getLocationOnScreen(location)
-            val squareX = location[0]
-            val squareY = location[1]
-            val squareSize = overlayView!!.getWidth()
-
-            // Perform gesture OUTSIDE the square, to the right of it, at same Y level
-            // This way we touch the actual content, not the overlay window
-            val gestureY = squareY + squareSize / 2
-            val gestureStartX = squareX + squareSize + 50 // 50px to the right of square
+            // Perform gesture in the area between Y 1600-2000, spanning most of the X axis
+            val gestureY = 1900 // 100px lower than before
+            val gestureStartX = screenWidth - 100 // Start from right side with 100px margin
             val swipeDistance = scrollDistance // Use the accumulated calibration value
             val startX = gestureStartX
             val endX = startX - swipeDistance
 
             // Use slower duration for more precise scrolling
             val duration = 500
-
 
             accessibilityService.performHorizontalScroll(startX, gestureY, endX, gestureY, duration)
         } catch (e: Exception) {
@@ -875,18 +902,11 @@ class OverlayService : Service() {
         try {
             val displayMetrics = DisplayMetrics()
             windowManager!!.getDefaultDisplay().getMetrics(displayMetrics)
+            val screenWidth = displayMetrics.widthPixels
 
-            // Get the square's ACTUAL position on screen
-            val location = IntArray(2)
-            overlayView!!.getLocationOnScreen(location)
-            val squareX = location[0]
-            val squareY = location[1]
-            val squareSize = overlayView!!.getWidth()
-
-            // Perform gesture OUTSIDE the square, to the right of it, at same Y level
-            // This way we touch the actual content, not the overlay window
-            val gestureY = squareY + squareSize / 2
-            val gestureStartX = squareX + squareSize + 50 // 50px to the right of square
+            // Perform gesture in the area between Y 1600-2000, spanning most of the X axis
+            val gestureY = 1900 // 100px lower than before
+            val gestureStartX = screenWidth - 100 // Start from right side with 100px margin
             val startX = gestureStartX
             val endX = startX - distance // distance can be positive or negative
 
@@ -914,9 +934,9 @@ class OverlayService : Service() {
             val screenWidth = displayMetrics.widthPixels
             val screenHeight = displayMetrics.heightPixels
 
-            // Perform gesture at center of screen
+            // Perform gesture at center of screen, adjusted 250px lower
             val centerX = screenWidth / 2
-            val centerY = screenHeight / 2
+            val centerY = screenHeight / 2 + 250
 
             // distance > 0 = scroll DOWN (swipe UP)
             // distance < 0 = scroll UP (swipe DOWN)
@@ -969,7 +989,7 @@ class OverlayService : Service() {
         }
     }
 
-    private fun goDownOneLine() {
+    private fun goDownOneLine(restoreUIAfter: Boolean = true) {
         if (screenshotCount == 0) {
             Toast.makeText(this, "No screenshots taken yet", Toast.LENGTH_SHORT).show()
             return
@@ -989,69 +1009,91 @@ class OverlayService : Service() {
             return
         }
 
-        try {
-            val displayMetrics = DisplayMetrics()
-            windowManager!!.getDefaultDisplay().getMetrics(displayMetrics)
-            val screenWidth = displayMetrics.widthPixels
-            val screenHeight = displayMetrics.heightPixels
-
-            // Perform gestures in the CENTER of the screen for consistent scroll distance
-            val centerX = screenWidth / 2
-            val centerY = screenHeight / 2
-
-            // First, scroll down by the square size (one line)
-            // Swipe UP to scroll DOWN content
-            val verticalDistance = verticalScrollDistance // Use separate vertical calibration
-            val startY = centerY + (verticalDistance / 2)
-            val endY = centerY - (verticalDistance / 2)
-
-
-            accessibilityService.performVerticalScroll(centerX, startY, centerX, endY, 500)
-
-            // Wait for vertical scroll to complete with momentum before starting horizontal scrolls
-            Handler(Looper.getMainLooper()).postDelayed(Runnable {
-                // Now scroll left, one scroll at a time with delays
-                scrollLeftSequentially(0, screenshotCount)
-            }, SCROLL_DELAY_MS.toLong())
-        } catch (e: Exception) {
+        // Hide all UI elements to prevent accidental clicks (only if not already hidden)
+        if (restoreUIAfter) {
+            setAllViewsVisible(false)
         }
+
+        // Wait 1100ms before starting gesture
+        Handler(Looper.getMainLooper()).postDelayed(Runnable {
+            try {
+                val displayMetrics = DisplayMetrics()
+                windowManager!!.getDefaultDisplay().getMetrics(displayMetrics)
+                val screenWidth = displayMetrics.widthPixels
+                val screenHeight = displayMetrics.heightPixels
+
+                // Perform gestures in the CENTER of the screen for consistent scroll distance
+                val centerX = screenWidth / 2
+                val centerY = screenHeight / 2 + 250 // 250px lower
+
+                // First, scroll down by the square size (one line)
+                // Swipe UP to scroll DOWN content
+                val verticalDistance = verticalScrollDistance // Use separate vertical calibration
+                val startY = centerY + (verticalDistance / 2)
+                val endY = centerY - (verticalDistance / 2)
+
+
+                accessibilityService.performVerticalScroll(centerX, startY, centerX, endY, 500)
+
+                // Wait for vertical scroll to complete with momentum before starting horizontal scrolls
+                Handler(Looper.getMainLooper()).postDelayed(Runnable {
+                    // Now scroll left, one scroll at a time with delays
+                    scrollLeftSequentially(0, screenshotCount, restoreUIAfter)
+                }, 1100)
+            } catch (e: Exception) {
+                // If error, restore UI
+                setAllViewsVisible(true)
+            }
+        }, 1100)
     }
 
-    private fun scrollLeftSequentially(currentScroll: Int, totalScrolls: Int) {
+    private fun scrollLeftSequentially(currentScroll: Int, totalScrolls: Int, restoreUIAfter: Boolean = true) {
         if (currentScroll >= totalScrolls) {
             // Done with all scrolls, reset screenshot counter
             screenshotCount = 0
             Toast.makeText(this, "Moved to next line", Toast.LENGTH_SHORT).show()
+            // Wait 1100ms before restoring UI (only if requested)
+            if (restoreUIAfter) {
+                Handler(Looper.getMainLooper()).postDelayed(Runnable {
+                    setAllViewsVisible(true)
+                }, 1100)
+            }
             return
         }
 
 
         val accessibilityService = instance
         if (accessibilityService == null || windowManager == null) {
+            // Restore UI if error (only if we were supposed to restore it)
+            if (restoreUIAfter) {
+                setAllViewsVisible(true)
+            }
             return
         }
 
         try {
-            // Perform gestures in the CENTER of the screen for consistent scroll distance
+            // Perform gestures in the area between Y 1600-2000
             val displayMetrics = DisplayMetrics()
             windowManager!!.getDefaultDisplay().getMetrics(displayMetrics)
             val screenWidth = displayMetrics.widthPixels
-            val screenHeight = displayMetrics.heightPixels
 
-            val centerX = screenWidth / 2
-            val centerY = screenHeight / 2
+            val gestureY = 1900 // 100px lower than before
 
             // Swipe RIGHT to scroll LEFT (back to beginning of line)
-            val startX = centerX - (scrollDistance / 2)
-            val endX = centerX + (scrollDistance / 2)
+            val startX = 100 // Start from left side with 100px margin
+            val endX = startX + scrollDistance
 
-            accessibilityService.performHorizontalScroll(startX, centerY, endX, centerY, 500)
+            accessibilityService.performHorizontalScroll(startX, gestureY, endX, gestureY, 500)
 
             // Wait for scroll to complete with momentum, then do next scroll
             Handler(Looper.getMainLooper()).postDelayed(Runnable {
-                scrollLeftSequentially(currentScroll + 1, totalScrolls)
-            }, SCROLL_DELAY_MS.toLong())
+                scrollLeftSequentially(currentScroll + 1, totalScrolls, restoreUIAfter)
+            }, 1100)
         } catch (e: Exception) {
+            // Restore UI if error (only if we were supposed to restore it)
+            if (restoreUIAfter) {
+                setAllViewsVisible(true)
+            }
         }
     }
 
@@ -1061,21 +1103,8 @@ class OverlayService : Service() {
                 Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
             val appDir = File(picturesDir, "SquareOverlay")
 
-            if (!appDir.exists() || !appDir.isDirectory()) {
-                Toast.makeText(this, "Output directory not found", Toast.LENGTH_SHORT).show()
-                return
-            }
-
-            // Find all PNG files in the output directory
-            val pngFiles = appDir.listFiles(FilenameFilter { dir: File?, name: String? ->
-                name!!.lowercase(
-                    Locale.getDefault()
-                ).endsWith(".png") && !name.startsWith("zoom")
-            })
-
-            if (pngFiles == null || pngFiles.size == 0) {
-                Toast.makeText(this, "No images found to stitch", Toast.LENGTH_SHORT).show()
-                return
+            if (!appDir.exists()) {
+                appDir.mkdirs()
             }
 
             // Find the next zoom level number
@@ -1084,29 +1113,23 @@ class OverlayService : Service() {
                 nextZoomLevel++
             }
 
-
             // Create the zoom folder
-            val zoomFolder = File(appDir, "zoom" + nextZoomLevel)
+            val zoomFolderName = "zoom" + nextZoomLevel
+            val zoomFolder = File(appDir, zoomFolderName)
             if (!zoomFolder.mkdirs()) {
                 Toast.makeText(this, "Failed to create zoom folder", Toast.LENGTH_SHORT).show()
                 return
             }
 
-            // Move all PNG files to the zoom folder
-            for (file in pngFiles) {
-                val dest = File(zoomFolder, file.getName())
-                if (!file.renameTo(dest)) {
-                }
-            }
-
-            // Reset counters after successfully moving files
+            // Set current zoom folder and reset screenshot numbering
+            currentZoomFolder = zoomFolderName
             screenshotCount = 0
             screenshotNumber = 1
 
-            // Now stitch the images using ImageMagick
-            stitchImages(zoomFolder, File(appDir, "zoom" + nextZoomLevel + ".png"))
+            // Pass the zoom folder to screenshot service
+            screenshotService?.setZoomFolder(zoomFolderName)
 
-            Toast.makeText(this, "Zoom level " + nextZoomLevel + " created", Toast.LENGTH_SHORT)
+            Toast.makeText(this, "Zoom " + nextZoomLevel + " - screenshots will be saved here", Toast.LENGTH_SHORT)
                 .show()
         } catch (e: Exception) {
             Toast.makeText(this, "Failed to create zoom level", Toast.LENGTH_SHORT).show()
@@ -1257,6 +1280,16 @@ class OverlayService : Service() {
             return
         }
 
+        val accessibilityService = instance
+        if (accessibilityService == null) {
+            Toast.makeText(
+                this,
+                "Please enable Square Overlay accessibility service in Settings",
+                Toast.LENGTH_LONG
+            ).show()
+            return
+        }
+
         // Hide all UI elements for clean screenshot
         setAllViewsVisible(false)
 
@@ -1275,8 +1308,20 @@ class OverlayService : Service() {
 
             // Wait for screenshot to complete, then scroll
             Handler(Looper.getMainLooper()).postDelayed(Runnable {
-                // Perform horizontal scroll using the SAME method as screenshot button
-                scrollHorizontallyBySquareWidth()
+                // Perform horizontal scroll using EXACT same logic as screenshot mode
+                try {
+                    val displayMetrics = DisplayMetrics()
+                    windowManager!!.getDefaultDisplay().getMetrics(displayMetrics)
+                    val screenWidth = displayMetrics.widthPixels
+
+                    val gestureY = 1900
+                    val swipeDistance = scrollDistance // Use the accumulated calibration value (same as screenshot mode)
+                    val startX = screenWidth - 100
+                    val endX = startX - swipeDistance
+
+                    accessibilityService.performHorizontalScroll(startX, gestureY, endX, gestureY, 500)
+                } catch (e: Exception) {
+                }
 
                 // Wait for scroll to complete (500ms scroll duration + 600ms for momentum/settling)
                 Handler(Looper.getMainLooper()).postDelayed(Runnable {
@@ -1290,7 +1335,7 @@ class OverlayService : Service() {
                         setAllViewsVisible(true)
                     }, 150)
                 }, 1100)
-            }, 150)
+            }, 1100)
         }, 50)
     }
 
@@ -1336,7 +1381,7 @@ class OverlayService : Service() {
                     val screenHeight = displayMetrics.heightPixels
 
                     val centerX = screenWidth / 2
-                    val centerY = screenHeight / 2
+                    val centerY = screenHeight / 2 + 250 // 250px lower
 
                     // Scroll down by verticalScrollDistance
                     val verticalDistance = verticalScrollDistance
@@ -1359,7 +1404,7 @@ class OverlayService : Service() {
                         setAllViewsVisible(true)
                     }, 150)
                 }, 1100)
-            }, 150)
+            }, 1100)
         }, 50)
     }
 
@@ -1569,6 +1614,58 @@ class OverlayService : Service() {
         dialog.show()
     }
 
+    private fun showScrollDistanceDialog(isVertical: Boolean) {
+        val builder = AlertDialog.Builder(this, R.style.Theme_Material_Dialog_Alert)
+        builder.setTitle("Set " + (if (isVertical) "Vertical " else "Horizontal ") + "Scroll Distance (px)")
+
+        val input = EditText(this)
+        input.setInputType(InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_SIGNED)
+        input.setText((if (isVertical) verticalScrollDistance else scrollDistance).toString())
+        input.setSelection(input.getText().length)
+        builder.setView(input)
+
+        builder.setPositiveButton(
+            "OK",
+            DialogInterface.OnClickListener { dialog: DialogInterface?, which: Int ->
+                try {
+                    val newValue = input.getText().toString().toInt()
+                    if (newValue >= -MAX_SCROLL_DISTANCE && newValue <= MAX_SCROLL_DISTANCE) {
+                        if (isVertical) {
+                            verticalScrollDistance = newValue
+                            if (vCounterDisplay != null) {
+                                vCounterDisplay!!.setCounter(verticalScrollDistance)
+                            }
+                        } else {
+                            scrollDistance = newValue
+                            if (counterDisplay != null) {
+                                counterDisplay!!.setCounter(scrollDistance)
+                            }
+                        }
+                    } else {
+                        Toast.makeText(
+                            this,
+                            "Value must be between -" + MAX_SCROLL_DISTANCE + " and " + MAX_SCROLL_DISTANCE,
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                } catch (e: NumberFormatException) {
+                    Toast.makeText(this, "Invalid number", Toast.LENGTH_SHORT).show()
+                }
+            })
+
+        builder.setNegativeButton(
+            "Cancel",
+            DialogInterface.OnClickListener { dialog: DialogInterface?, which: Int -> dialog!!.cancel() })
+
+        val dialog = builder.create()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            dialog.getWindow()!!.setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
+        } else {
+            dialog.getWindow()!!.setType(WindowManager.LayoutParams.TYPE_SYSTEM_ALERT)
+        }
+        dialog.show()
+    }
+
     private fun showMultiScreenshotDialog() {
         val builder = AlertDialog.Builder(this, R.style.Theme_Material_Dialog_Alert)
         builder.setTitle("Set Screenshot Count")
@@ -1649,6 +1746,10 @@ class OverlayService : Service() {
                         " (" + totalRows + " row" + (if (totalRows > 1) "s" else "") + ")",
                 Toast.LENGTH_LONG
             ).show()
+            // Restore UI now that all rows are complete
+            Handler(Looper.getMainLooper()).postDelayed(Runnable {
+                setAllViewsVisible(true)
+            }, 1100)
             return
         }
 
@@ -1670,13 +1771,13 @@ class OverlayService : Service() {
                 nextScreenshotIsLineStart = true
 
                 // Calculate time needed for goDownOneLine
-                // goDownOneLine does: vertical scroll (500ms) + wait (SCROLL_DELAY_MS = 600ms) + horizontal scrolls back
+                // goDownOneLine does: initial wait (1100ms) + vertical scroll (500ms) + wait (SCROLL_DELAY_MS = 600ms) + horizontal scrolls back
                 // Each horizontal scroll back takes 500ms + 600ms delay
-                // Total time = 500 + 600 + (screenshotCount * 1100ms)
+                // Total time = 1100 + 500 + 600 + (screenshotCount * 1100ms)
                 val goDownDelay: Int =
-                    500 + SCROLL_DELAY_MS + (screenshotCount * (500 + SCROLL_DELAY_MS))
+                    1100 + 500 + SCROLL_DELAY_MS + (screenshotCount * (500 + SCROLL_DELAY_MS))
 
-                goDownOneLine()
+                goDownOneLine(restoreUIAfter = false) // Don't restore UI between rows
 
                 // Wait for goDownOneLine to complete, then start next row
                 Handler(Looper.getMainLooper()).postDelayed(Runnable {
@@ -1693,11 +1794,11 @@ class OverlayService : Service() {
             overlayView!!.triggerScreenshot()
 
             // Wait for this screenshot to complete before starting the next one
-            // Total time per screenshot: 50ms + 100ms (capture) + 150ms + 500ms (scroll) + 600ms (settle) + 150ms = 1550ms
-            // Adding buffer for safety: 2000ms
+            // Total time per screenshot: 50ms + 150ms (capture) + 1100ms (wait) + 500ms (scroll) + 1100ms (settle) = 2900ms
+            // Adding buffer for safety: 3100ms
             Handler(Looper.getMainLooper()).postDelayed(Runnable {
                 performMultipleScreenshotsRecursive(current + 1, total, currentRow, totalRows)
-            }, 2000)
+            }, 3100)
         } else {
             isMultiScreenshotInProgress = false
         }
@@ -1717,14 +1818,13 @@ class OverlayService : Service() {
         private const val NOTIFICATION_ID = 1
 
         // Default values
-        private const val DEFAULT_SCROLL_DISTANCE = 773
-        private const val DEFAULT_VERTICAL_SCROLL_DISTANCE = 718
-        private const val DEFAULT_SQUARE_SIZE = 695f
-        private const val DEFAULT_SQUARE_X = 346
-        private const val DEFAULT_SQUARE_Y = 346
+        private const val DEFAULT_SCROLL_DISTANCE = 1050
+        private const val DEFAULT_VERTICAL_SCROLL_DISTANCE = 1038
+        private const val DEFAULT_SQUARE_SIZE = 1000f
+        private const val DEFAULT_SQUARE_Y = 400
 
         private const val MAX_SCROLL_DISTANCE =
-            1100 // Maximum scroll distance to avoid off-screen gestures
+            2000 // Maximum scroll distance to avoid off-screen gestures
         private const val SCROLL_DELAY_MS =
             600 // Delay between sequential scrolls to account for momentum
     }

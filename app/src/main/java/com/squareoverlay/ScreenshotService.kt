@@ -31,6 +31,7 @@ class ScreenshotService(context: Context) {
     private val screenDensity: Int
 
     private var isCapturing = false
+    private var currentZoomFolder: String? = null // Track current zoom folder
 
     init {
         this.context = context
@@ -151,6 +152,10 @@ class ScreenshotService(context: Context) {
         }, 100)
     }
 
+    fun setZoomFolder(zoomFolder: String?) {
+        this.currentZoomFolder = zoomFolder
+    }
+
     private fun saveBitmap(bitmap: Bitmap, screenshotNumber: Int, isLineStart: Boolean) {
         try {
             val picturesDir =
@@ -161,8 +166,19 @@ class ScreenshotService(context: Context) {
                 appDir.mkdirs()
             }
 
-            val filename = screenshotNumber.toString() + (if (isLineStart) "z" else "") + ".png"
-            val file = File(appDir, filename)
+            // Determine target directory based on whether we're in a zoom folder
+            val targetDir = if (currentZoomFolder != null) {
+                File(appDir, currentZoomFolder)
+            } else {
+                appDir
+            }
+
+            if (!targetDir.exists()) {
+                targetDir.mkdirs()
+            }
+
+            val filename = String.format("%05d", screenshotNumber) + (if (isLineStart) "z" else "") + ".png"
+            val file = File(targetDir, filename)
 
             val fos = FileOutputStream(file)
             bitmap.compress(Bitmap.CompressFormat.PNG, 100, fos)
