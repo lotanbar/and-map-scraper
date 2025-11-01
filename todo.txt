@@ -1,0 +1,7 @@
+Fix those problems yourself: Try to do those youreslef!! It could be a nice project!
+    Same gap for buttons
+    a bit less wait after scroll in screenshot.
+    Perhaps a fast scroll?
+    BIGGER square
+    after go down a line, wait relative to the number of left horizontal scrolls
+    zoom buttons crashes for long tiles - perhaps we can show feedback?
