@@ -79,6 +79,7 @@ class OverlayService : Service() {
     private var isMultiScreenshotInProgress =
         false // Flag to prevent re-entry during multi-screenshot
     private var shouldStopMultiScreenshot = false // Flag to signal stopping multi-screenshot
+    private var scrollDirectionRight = true // True = scroll RIGHT (left-to-right), False = scroll LEFT (right-to-left)
 
     private lateinit var sharedPreferences: SharedPreferences
 
@@ -267,6 +268,7 @@ class OverlayService : Service() {
                     // Perform multiple screenshots (potentially multiple rows)
                     isMultiScreenshotInProgress = true
                     shouldStopMultiScreenshot = false
+                    scrollDirectionRight = true // Always start going RIGHT (left-to-right)
                     // Hide UI at the very start of multi-screenshot process
                     setAllViewsVisible(false)
                     // Show stop button
@@ -927,10 +929,22 @@ class OverlayService : Service() {
 
             // Perform gesture in the area between Y 1600-2000, spanning most of the X axis
             val gestureY = 1900 // 100px lower than before
-            val gestureStartX = screenWidth - 100 // Start from right side with 100px margin
             val swipeDistance = scrollDistance // Use the accumulated calibration value
-            val startX = gestureStartX
-            val endX = startX - swipeDistance
+
+            val startX: Int
+            val endX: Int
+
+            if (scrollDirectionRight) {
+                // Scrolling RIGHT (left-to-right): swipe LEFT
+                val gestureStartX = screenWidth - 100 // Start from right side with 100px margin
+                startX = gestureStartX
+                endX = startX - swipeDistance
+            } else {
+                // Scrolling LEFT (right-to-left): swipe RIGHT
+                val gestureStartX = screenWidth - 100 - swipeDistance // Start from left side
+                startX = gestureStartX
+                endX = startX + swipeDistance
+            }
 
             // Use slower duration for more precise scrolling
             val duration = 500
@@ -1077,81 +1091,33 @@ class OverlayService : Service() {
                 val centerX = screenWidth / 2
                 val centerY = screenHeight / 2 + 250 // 250px lower
 
-                // First, scroll down by the square size (one line)
+                // Scroll down by the square size (one line)
                 // Swipe UP to scroll DOWN content
                 val verticalDistance = verticalScrollDistance // Use separate vertical calibration
                 val startY = centerY + (verticalDistance / 2)
                 val endY = centerY - (verticalDistance / 2)
 
-
                 accessibilityService.performVerticalScroll(centerX, startY, centerX, endY, 500)
 
-                // Wait for vertical scroll to complete with momentum before starting horizontal scrolls
+                // Wait for vertical scroll to complete with momentum
                 Handler(Looper.getMainLooper()).postDelayed(Runnable {
-                    // Now scroll left, one scroll at a time with delays
-                    scrollLeftSequentially(0, screenshotCount, restoreUIAfter)
+                    // Reset screenshot counter for next row
+                    screenshotCount = 0
+                    Toast.makeText(this, "Moved to next line", Toast.LENGTH_SHORT).show()
+                    // Wait before restoring UI (only if requested)
+                    if (restoreUIAfter) {
+                        setAllViewsVisible(true)
+                    }
                 }, 1100)
             } catch (e: Exception) {
                 // If error, restore UI
-                setAllViewsVisible(true)
+                if (restoreUIAfter) {
+                    setAllViewsVisible(true)
+                }
             }
         }, 1100)
     }
 
-    private fun scrollLeftSequentially(currentScroll: Int, totalScrolls: Int, restoreUIAfter: Boolean = true) {
-        if (currentScroll >= totalScrolls) {
-            // Done with all scrolls, reset screenshot counter
-            screenshotCount = 0
-            Toast.makeText(this, "Moved to next line", Toast.LENGTH_SHORT).show()
-            // Wait 1100ms before restoring UI (only if requested)
-            if (restoreUIAfter) {
-                Handler(Looper.getMainLooper()).postDelayed(Runnable {
-                    setAllViewsVisible(true)
-                }, 1100)
-            }
-            return
-        }
-
-
-        val accessibilityService = instance
-        if (accessibilityService == null || windowManager == null) {
-            // Restore UI if error (only if we were supposed to restore it)
-            if (restoreUIAfter) {
-                setAllViewsVisible(true)
-            }
-            return
-        }
-
-        try {
-            // Perform gestures in the area between Y 1600-2000
-            val displayMetrics = DisplayMetrics()
-            windowManager!!.getDefaultDisplay().getMetrics(displayMetrics)
-            val screenWidth = displayMetrics.widthPixels
-
-            val gestureY = 1900 // 100px lower than before
-
-            // Swipe RIGHT to scroll LEFT (back to beginning of line)
-            // Use EXACT REVERSE of screenshot scroll for perfect alignment
-            // Screenshot: start=(screenWidth-100), end=(screenWidth-100-scrollDistance)
-            // Go-down: start=(screenWidth-100-scrollDistance), end=(screenWidth-100)
-            val screenshotEndX = screenWidth - 100 - scrollDistance // Where screenshot ends
-            val screenshotStartX = screenWidth - 100 // Where screenshot starts
-            val startX = screenshotEndX // Start where screenshot ended
-            val endX = screenshotStartX // End where screenshot started
-
-            accessibilityService.performHorizontalScroll(startX, gestureY, endX, gestureY, 500)
-
-            // Wait for scroll to complete with momentum, then do next scroll
-            Handler(Looper.getMainLooper()).postDelayed(Runnable {
-                scrollLeftSequentially(currentScroll + 1, totalScrolls, restoreUIAfter)
-            }, 1100)
-        } catch (e: Exception) {
-            // Restore UI if error (only if we were supposed to restore it)
-            if (restoreUIAfter) {
-                setAllViewsVisible(true)
-            }
-        }
-    }
 
     private fun processNextZoomLevel() {
         try {
@@ -1859,19 +1825,19 @@ class OverlayService : Service() {
                 // Mark next screenshot as line start for the 'z' suffix
                 nextScreenshotIsLineStart = true
 
-                // Calculate time needed for goDownOneLine
-                // goDownOneLine does: initial wait (1100ms) + vertical scroll (500ms) + wait (SCROLL_DELAY_MS = 600ms) + horizontal scrolls back
-                // Each horizontal scroll back takes 500ms + 600ms delay
-                // Total time = 1100 + 500 + 600 + (screenshotCount * 1100ms)
-                val goDownDelay: Int =
-                    1100 + 500 + SCROLL_DELAY_MS + (screenshotCount * (500 + SCROLL_DELAY_MS))
+                // Toggle direction for next row (bidirectional boustrophedon)
+                scrollDirectionRight = !scrollDirectionRight
+
+                // Calculate time needed for goDownOneLine (now WITHOUT horizontal scrolls back)
+                // goDownOneLine does: initial wait (1100ms) + vertical scroll (500ms) + wait (1100ms settle)
+                val goDownDelay: Int = 1100 + 500 + 1100
 
                 goDownOneLine(restoreUIAfter = false) // Don't restore UI between rows
 
                 // Wait for goDownOneLine to complete, then start next row
                 Handler(Looper.getMainLooper()).postDelayed(Runnable {
                     performMultipleRowsRecursive(currentRow + 1, totalRows)
-                }, (goDownDelay + 1000).toLong()) // Extra 1 second buffer for safety
+                }, goDownDelay.toLong())
             } else {
                 // Last row finished
                 performMultipleRowsRecursive(currentRow + 1, totalRows)
