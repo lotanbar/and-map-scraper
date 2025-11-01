@@ -60,6 +60,7 @@ class OverlayService : Service() {
     private var nextLineButton: NextLineButtonView? = null
     private var fileBrowserButton: FileBrowserButtonView? = null
     private var nextZoomLevelButton: NextZoomLevelButtonView? = null
+    private var stopButton: StopButtonView? = null
     private var screenshotService: ScreenshotService? = null
 
     private var scrollDistance: Int =
@@ -77,6 +78,7 @@ class OverlayService : Service() {
     private var multiScreenshotRows = 1 // Number of rows to capture (default 1)
     private var isMultiScreenshotInProgress =
         false // Flag to prevent re-entry during multi-screenshot
+    private var shouldStopMultiScreenshot = false // Flag to signal stopping multi-screenshot
 
     private lateinit var sharedPreferences: SharedPreferences
 
@@ -226,9 +228,9 @@ class OverlayService : Service() {
                             if (!isMultiScreenshotInProgress) {
                                 setAllViewsVisible(true)
                             }
-                        }, 1100)
-                    }, 1100)
-                }, 50)
+                        }, SCREENSHOT_SCROLL_SETTLE_DELAY.toLong())
+                    }, SCREENSHOT_CAPTURE_DELAY.toLong())
+                }, SCREENSHOT_UI_HIDE_DELAY.toLong())
             } else {
                 Toast.makeText(this, "Screenshot not initialized", Toast.LENGTH_SHORT).show()
             }
@@ -264,8 +266,11 @@ class OverlayService : Service() {
                 if (multiScreenshotCount > 1 || multiScreenshotRows > 1) {
                     // Perform multiple screenshots (potentially multiple rows)
                     isMultiScreenshotInProgress = true
+                    shouldStopMultiScreenshot = false
                     // Hide UI at the very start of multi-screenshot process
                     setAllViewsVisible(false)
+                    // Show stop button
+                    stopButton?.visibility = View.VISIBLE
                     // Small delay to ensure UI is hidden
                     Handler(Looper.getMainLooper()).postDelayed(Runnable {
                         performMultipleRowsRecursive(0, multiScreenshotRows)
@@ -796,6 +801,36 @@ class OverlayService : Service() {
         }
 
         windowManager!!.addView(nextZoomLevelButton, nextZoomLevelParams)
+
+        // Create stop button (hidden by default, shown only during multi-screenshot)
+        stopButton = StopButtonView(this)
+
+        val stopButtonLayoutType: Int
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            stopButtonLayoutType = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+        } else {
+            stopButtonLayoutType = WindowManager.LayoutParams.TYPE_PHONE
+        }
+
+        val stopButtonParams = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            stopButtonLayoutType,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+            PixelFormat.TRANSLUCENT
+        )
+
+        stopButtonParams.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+        stopButtonParams.y = 100 // Bottom center
+
+        stopButton?.setButtonClickListener {
+            stopMultiScreenshot()
+        }
+
+        stopButton?.visibility = View.INVISIBLE // Hidden by default
+
+        windowManager!!.addView(stopButton, stopButtonParams)
     }
 
     private fun hideOverlay() {
@@ -862,6 +897,10 @@ class OverlayService : Service() {
         if (vTestButton != null && windowManager != null) {
             windowManager!!.removeView(vTestButton)
             vTestButton = null
+        }
+        if (stopButton != null && windowManager != null) {
+            windowManager!!.removeView(stopButton)
+            stopButton = null
         }
     }
 
@@ -1092,8 +1131,13 @@ class OverlayService : Service() {
             val gestureY = 1900 // 100px lower than before
 
             // Swipe RIGHT to scroll LEFT (back to beginning of line)
-            val startX = 100 // Start from left side with 100px margin
-            val endX = startX + scrollDistance
+            // Use EXACT REVERSE of screenshot scroll for perfect alignment
+            // Screenshot: start=(screenWidth-100), end=(screenWidth-100-scrollDistance)
+            // Go-down: start=(screenWidth-100-scrollDistance), end=(screenWidth-100)
+            val screenshotEndX = screenWidth - 100 - scrollDistance // Where screenshot ends
+            val screenshotStartX = screenWidth - 100 // Where screenshot starts
+            val startX = screenshotEndX // Start where screenshot ended
+            val endX = screenshotStartX // End where screenshot started
 
             accessibilityService.performHorizontalScroll(startX, gestureY, endX, gestureY, 500)
 
@@ -1318,7 +1362,7 @@ class OverlayService : Service() {
                 "horizontal test", "before.png"
             )
 
-            // Wait for screenshot to complete, then scroll
+            // Wait for screenshot to complete, then scroll (use SAME timing as normal screenshots)
             Handler(Looper.getMainLooper()).postDelayed(Runnable {
                 // Perform horizontal scroll using EXACT same logic as screenshot mode
                 try {
@@ -1331,11 +1375,11 @@ class OverlayService : Service() {
                     val startX = screenWidth - 100
                     val endX = startX - swipeDistance
 
-                    accessibilityService.performHorizontalScroll(startX, gestureY, endX, gestureY, 500)
+                    accessibilityService.performHorizontalScroll(startX, gestureY, endX, gestureY, SCREENSHOT_SCROLL_DURATION)
                 } catch (e: Exception) {
                 }
 
-                // Wait for scroll to complete (500ms scroll duration + 600ms for momentum/settling)
+                // Wait for scroll to complete (use SAME timing as normal screenshots)
                 Handler(Looper.getMainLooper()).postDelayed(Runnable {
                     screenshotService!!.captureTestScreenshot(
                         xPercent, yPercent, widthPercent, heightPercent,
@@ -1346,9 +1390,9 @@ class OverlayService : Service() {
                         stitchAndRotateTestImages()
                         setAllViewsVisible(true)
                     }, 150)
-                }, 1100)
-            }, 1100)
-        }, 50)
+                }, SCREENSHOT_SCROLL_SETTLE_DELAY.toLong())
+            }, SCREENSHOT_CAPTURE_DELAY.toLong())
+        }, SCREENSHOT_UI_HIDE_DELAY.toLong())
     }
 
     private fun performVerticalTest() {
@@ -1400,11 +1444,11 @@ class OverlayService : Service() {
                     val startY = centerY + (verticalDistance / 2)
                     val endY = centerY - (verticalDistance / 2)
 
-                    accessibilityService.performVerticalScroll(centerX, startY, centerX, endY, 500)
+                    accessibilityService.performVerticalScroll(centerX, startY, centerX, endY, SCREENSHOT_SCROLL_DURATION)
                 } catch (e: Exception) {
                 }
 
-                // Wait for scroll to complete (500ms scroll duration + 600ms for momentum/settling)
+                // Wait for scroll to complete (use SAME timing as normal screenshots)
                 Handler(Looper.getMainLooper()).postDelayed(Runnable {
                     screenshotService!!.captureTestScreenshot(
                         xPercent, yPercent, widthPercent, heightPercent,
@@ -1415,9 +1459,9 @@ class OverlayService : Service() {
                         stitchTestImages("vertical test")
                         setAllViewsVisible(true)
                     }, 150)
-                }, 1100)
-            }, 1100)
-        }, 50)
+                }, SCREENSHOT_SCROLL_SETTLE_DELAY.toLong())
+            }, SCREENSHOT_CAPTURE_DELAY.toLong())
+        }, SCREENSHOT_UI_HIDE_DELAY.toLong())
     }
 
     private fun stitchAndRotateTestImages() {
@@ -1752,24 +1796,48 @@ class OverlayService : Service() {
     }
 
     private fun performMultipleRowsRecursive(currentRow: Int, totalRows: Int) {
+        // Check if we should stop
+        if (shouldStopMultiScreenshot) {
+            cleanupAfterMultiScreenshot(wasStopped = true)
+            return
+        }
+
         if (currentRow >= totalRows) {
-            isMultiScreenshotInProgress = false
-            val totalScreenshots = multiScreenshotCount * totalRows
-            Toast.makeText(
-                this,
-                "Completed " + totalScreenshots + " screenshot" + (if (totalScreenshots > 1) "s" else "") +
-                        " (" + totalRows + " row" + (if (totalRows > 1) "s" else "") + ")",
-                Toast.LENGTH_LONG
-            ).show()
-            // Restore UI now that all rows are complete
-            Handler(Looper.getMainLooper()).postDelayed(Runnable {
-                setAllViewsVisible(true)
-            }, 1100)
+            cleanupAfterMultiScreenshot(wasStopped = false)
             return
         }
 
         // Perform one row of screenshots
         performMultipleScreenshotsRecursive(0, multiScreenshotCount, currentRow, totalRows)
+    }
+
+    private fun cleanupAfterMultiScreenshot(wasStopped: Boolean) {
+        isMultiScreenshotInProgress = false
+        shouldStopMultiScreenshot = false
+
+        // Hide stop button
+        stopButton?.visibility = View.INVISIBLE
+
+        if (wasStopped) {
+            Toast.makeText(this, "Multi-screenshot stopped", Toast.LENGTH_SHORT).show()
+        } else {
+            val totalScreenshots = multiScreenshotCount * multiScreenshotRows
+            Toast.makeText(
+                this,
+                "Completed " + totalScreenshots + " screenshot" + (if (totalScreenshots > 1) "s" else "") +
+                        " (" + multiScreenshotRows + " row" + (if (multiScreenshotRows > 1) "s" else "") + ")",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+
+        // Restore UI
+        Handler(Looper.getMainLooper()).postDelayed(Runnable {
+            setAllViewsVisible(true)
+        }, 1100)
+    }
+
+    private fun stopMultiScreenshot() {
+        shouldStopMultiScreenshot = true
     }
 
     private fun performMultipleScreenshotsRecursive(
@@ -1778,6 +1846,12 @@ class OverlayService : Service() {
         currentRow: Int,
         totalRows: Int
     ) {
+        // Check if we should stop
+        if (shouldStopMultiScreenshot) {
+            cleanupAfterMultiScreenshot(wasStopped = true)
+            return
+        }
+
         if (current >= total) {
             // Finished this row
             if (currentRow < totalRows - 1) {
@@ -1809,11 +1883,12 @@ class OverlayService : Service() {
             overlayView!!.triggerScreenshot()
 
             // Wait for this screenshot to complete before starting the next one
-            // Total time per screenshot: 50ms + 150ms (capture) + 1100ms (wait) + 500ms (scroll) + 1100ms (settle) = 2900ms
-            // Adding buffer for safety: 3100ms
+            // Total time = UI_HIDE + CAPTURE + SCROLL_DURATION + SETTLE + buffer
+            val screenshotDelay = SCREENSHOT_UI_HIDE_DELAY + SCREENSHOT_CAPTURE_DELAY +
+                                 SCREENSHOT_SCROLL_DURATION + SCREENSHOT_SCROLL_SETTLE_DELAY + 200 // 200ms buffer
             Handler(Looper.getMainLooper()).postDelayed(Runnable {
                 performMultipleScreenshotsRecursive(current + 1, total, currentRow, totalRows)
-            }, 3100)
+            }, screenshotDelay.toLong())
         } else {
             isMultiScreenshotInProgress = false
         }
@@ -1863,8 +1938,8 @@ class OverlayService : Service() {
         private const val KEY_MULTI_SCREENSHOT_ROWS = "multi_screenshot_rows"
 
         // Default values
-        private const val DEFAULT_SCROLL_DISTANCE = 1050
-        private const val DEFAULT_VERTICAL_SCROLL_DISTANCE = 1038
+        private const val DEFAULT_SCROLL_DISTANCE = 1038
+        private const val DEFAULT_VERTICAL_SCROLL_DISTANCE = 1033
         private const val DEFAULT_SQUARE_SIZE = 1000f
         private const val DEFAULT_SQUARE_Y = 400
 
@@ -1872,5 +1947,11 @@ class OverlayService : Service() {
             2000 // Maximum scroll distance to avoid off-screen gestures
         private const val SCROLL_DELAY_MS =
             600 // Delay between sequential scrolls to account for momentum
+
+        // Screenshot timing constants
+        private const val SCREENSHOT_UI_HIDE_DELAY = 50 // Delay before taking screenshot
+        private const val SCREENSHOT_CAPTURE_DELAY = 300 // Delay after screenshot before scrolling
+        private const val SCREENSHOT_SCROLL_SETTLE_DELAY = 600 // Delay for scroll to settle
+        private const val SCREENSHOT_SCROLL_DURATION = 500 // Scroll gesture duration
     }
 }

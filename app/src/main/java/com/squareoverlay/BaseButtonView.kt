@@ -244,6 +244,6 @@ abstract class BaseButtonView @JvmOverloads constructor(
     companion object {
         private const val LONG_PRESS_DELAY = 400
         private const val REPEAT_INTERVAL = 200
-        private const val CUSTOM_LONG_PRESS_DELAY = 2000
+        private const val CUSTOM_LONG_PRESS_DELAY = 1000 // 1 second for advanced screenshot dialog
     }
 }
