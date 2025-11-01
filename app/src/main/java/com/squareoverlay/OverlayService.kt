@@ -6,8 +6,10 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
+import android.content.Context
 import android.content.DialogInterface
 import android.content.Intent
+import android.content.SharedPreferences
 import android.content.pm.ServiceInfo
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -76,12 +78,16 @@ class OverlayService : Service() {
     private var isMultiScreenshotInProgress =
         false // Flag to prevent re-entry during multi-screenshot
 
+    private lateinit var sharedPreferences: SharedPreferences
+
     override fun onBind(intent: Intent?): IBinder? {
         return null
     }
 
     override fun onCreate() {
         super.onCreate()
+        sharedPreferences = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        loadSavedSettings()
         createNotificationChannel()
         startForeground()
     }
@@ -309,6 +315,7 @@ class OverlayService : Service() {
                 counterDisplay!!.setCounter(scrollDistance)
             }
             performSmallScroll(-scrollIncrement)
+            saveSettings()
         }
 
         windowManager!!.addView(minusButton, minusParams)
@@ -344,6 +351,7 @@ class OverlayService : Service() {
                     counterDisplay!!.setCounter(scrollDistance)
                 }
                 performSmallScroll(scrollIncrement)
+                saveSettings()
             } else {
                 Toast.makeText(
                     this,
@@ -385,6 +393,7 @@ class OverlayService : Service() {
                 vCounterDisplay!!.setCounter(verticalScrollDistance)
             }
             performSmallVerticalScroll(-verticalScrollIncrement) // Negative = scroll UP
+            saveSettings()
         }
 
         windowManager!!.addView(vMinusButton, vMinusParams)
@@ -420,6 +429,7 @@ class OverlayService : Service() {
                     vCounterDisplay!!.setCounter(verticalScrollDistance)
                 }
                 performSmallVerticalScroll(verticalScrollIncrement) // Positive = scroll DOWN
+                saveSettings()
             } else {
                 Toast.makeText(
                     this,
@@ -723,6 +733,8 @@ class OverlayService : Service() {
             screenshotCount = 0
             screenshotNumber = 1
             screenshotService?.setZoomFolder(null)
+
+            saveSettings()
         }
 
         windowManager!!.addView(resetButton, resetParams)
@@ -1596,6 +1608,7 @@ class OverlayService : Service() {
                                 scrollIncrementInput!!.value = scrollIncrement
                             }
                         }
+                        saveSettings()
                     }
                 } catch (e: NumberFormatException) {
                 }
@@ -1641,6 +1654,7 @@ class OverlayService : Service() {
                                 counterDisplay!!.setCounter(scrollDistance)
                             }
                         }
+                        saveSettings()
                     } else {
                         Toast.makeText(
                             this,
@@ -1710,6 +1724,7 @@ class OverlayService : Service() {
                     if (screenshotsPerRow > 0 && screenshotsPerRow <= 100 && rows > 0 && rows <= 50) {
                         multiScreenshotCount = screenshotsPerRow
                         multiScreenshotRows = rows
+                        saveSettings()
                         val message =
                             "Next click: " + screenshotsPerRow + " screenshot" + (if (screenshotsPerRow > 1) "s" else "") +
                                     " × " + rows + " row" + (if (rows > 1) "s" else "")
@@ -1813,9 +1828,39 @@ class OverlayService : Service() {
         }
     }
 
+    private fun loadSavedSettings() {
+        scrollDistance = sharedPreferences.getInt(KEY_SCROLL_DISTANCE, DEFAULT_SCROLL_DISTANCE)
+        verticalScrollDistance = sharedPreferences.getInt(KEY_VERTICAL_SCROLL_DISTANCE, DEFAULT_VERTICAL_SCROLL_DISTANCE)
+        scrollIncrement = sharedPreferences.getInt(KEY_SCROLL_INCREMENT, 30)
+        verticalScrollIncrement = sharedPreferences.getInt(KEY_VERTICAL_SCROLL_INCREMENT, 30)
+        multiScreenshotCount = sharedPreferences.getInt(KEY_MULTI_SCREENSHOT_COUNT, 1)
+        multiScreenshotRows = sharedPreferences.getInt(KEY_MULTI_SCREENSHOT_ROWS, 1)
+    }
+
+    private fun saveSettings() {
+        sharedPreferences.edit().apply {
+            putInt(KEY_SCROLL_DISTANCE, scrollDistance)
+            putInt(KEY_VERTICAL_SCROLL_DISTANCE, verticalScrollDistance)
+            putInt(KEY_SCROLL_INCREMENT, scrollIncrement)
+            putInt(KEY_VERTICAL_SCROLL_INCREMENT, verticalScrollIncrement)
+            putInt(KEY_MULTI_SCREENSHOT_COUNT, multiScreenshotCount)
+            putInt(KEY_MULTI_SCREENSHOT_ROWS, multiScreenshotRows)
+            apply()
+        }
+    }
+
     companion object {
         private const val CHANNEL_ID = "SquareOverlayChannel"
         private const val NOTIFICATION_ID = 1
+
+        // SharedPreferences
+        private const val PREFS_NAME = "SquareOverlayPrefs"
+        private const val KEY_SCROLL_DISTANCE = "scroll_distance"
+        private const val KEY_VERTICAL_SCROLL_DISTANCE = "vertical_scroll_distance"
+        private const val KEY_SCROLL_INCREMENT = "scroll_increment"
+        private const val KEY_VERTICAL_SCROLL_INCREMENT = "vertical_scroll_increment"
+        private const val KEY_MULTI_SCREENSHOT_COUNT = "multi_screenshot_count"
+        private const val KEY_MULTI_SCREENSHOT_ROWS = "multi_screenshot_rows"
 
         // Default values
         private const val DEFAULT_SCROLL_DISTANCE = 1050
